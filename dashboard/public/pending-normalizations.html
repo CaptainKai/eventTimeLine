@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待验证归一化 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/pending-normalizations.html" class="nav-link active" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">Provisional Entity / Action Review</div>
+        <h2>待验证实体 / 动作</h2>
+        <p>这里集中处理尚未进入标准实体或标准动作表的 provisional 项，支持 LLM 巡检、人工新增和人工标记噪声（保留记录）。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip warn" id="pending-stats-chip">加载中</span>
+      </div>
+    </section>
+
+    <section class="hero-bar" style="padding: 0.85rem 1rem;">
+      <div class="toolbar-inline">
+        <div class="filter-group">
+          <label for="kind-filter">类型</label>
+          <select id="kind-filter">
+            <option value="">全部</option>
+            <option value="entity">实体</option>
+            <option value="action">动作</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="status-filter">状态</label>
+          <select id="status-filter">
+            <option value="pending">pending</option>
+            <option value="promoted">promoted</option>
+            <option value="merged">merged</option>
+            <option value="rejected">rejected</option>
+            <option value="">全部状态</option>
+          </select>
+        </div>
+        <button id="reload-btn">刷新</button>
+      </div>
+      <div class="chip-row">
+        <span class="chip" id="page-chip">第 1 页</span>
+        <button id="prev-page" style="background: rgba(255,255,255,0.1);">上一页</button>
+        <button id="next-page" style="background: rgba(255,255,255,0.1);">下一页</button>
+      </div>
+    </section>
+
+    <section class="workbench-layout">
+      <aside class="list-card">
+        <div class="section-head">
+          <div>
+            <h3>待验证列表</h3>
+            <p id="list-meta">按出现次数和最近出现时间排序</p>
+          </div>
+        </div>
+        <div class="list-scroll-area" id="pending-list"></div>
+      </aside>
+
+      <section class="detail-layout">
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <h3 id="detail-title">选择一个待验证项</h3>
+              <p id="detail-meta">查看证据、LLM 建议并执行人工巡检。</p>
+            </div>
+            <div class="chip-row" id="detail-chips"></div>
+          </div>
+          <div id="detail-body" class="summary-text">左侧选择一项后，这里会展示 identity key、原始文本、引用计数和最近巡检结果。</div>
+        </article>
+
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <h3>人工操作</h3>
+              <p>“新增”会提升到标准实体/动作表并触发受影响新闻重建；“标记噪声”只记录巡检原因，不删除记录、不触发重建。</p>
+            </div>
+          </div>
+          <div class="toolbar-inline" style="margin-bottom: 0.8rem;">
+            <button id="llm-review-btn">LLM 巡检</button>
+            <button id="promote-btn">新增到标准库</button>
+            <button id="reject-btn" style="background: #ff4757;">标记噪声</button>
+          </div>
+          <div class="filter-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+            <div class="filter-group">
+              <label for="canonical-name-input">标准名称 / 动作名</label>
+              <input id="canonical-name-input" placeholder="默认使用 provisional name">
+            </div>
+            <div class="filter-group">
+              <label for="type-input">实体类型 / 动作分类</label>
+              <input id="type-input" placeholder="organization / conflict / custom">
+            </div>
+            <div class="filter-group">
+              <label for="reason-input">人工原因</label>
+              <input id="reason-input" placeholder="人工确认原因">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label for="parent-entity-input">Parent entity</label>
+            <input id="parent-entity-input" placeholder="e.g. France / China / NATO">
+          </div>
+          <div class="filter-group">
+            <label for="entity-subtype-input">Entity subtype</label>
+            <input id="entity-subtype-input" placeholder="foreign_minister / ministry / branch">
+          </div>
+          <pre id="review-output" class="article-preview" style="margin-top: 0.9rem; max-height: 360px; overflow:auto;"></pre>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script>
+    const api = window.apiClient;
+    const PAGE_SIZE = 50;
+    let currentPage = 1;
+    let currentItems = [];
+    let selectedId = null;
+    let pagination = { total: 0, page: 1, limit: PAGE_SIZE };
+
+    function filters() {
+      return {
+        itemKind: document.getElementById('kind-filter').value || '',
+        status: document.getElementById('status-filter').value || 'pending',
+      };
+    }
+
+    function selectedItem() {
+      return currentItems.find(item => Number(item.id) === Number(selectedId));
+    }
+
+    function kindChip(item) {
+      return item.item_kind === 'action'
+        ? '<span class="chip warn">动作</span>'
+        : '<span class="chip info">实体</span>';
+    }
+
+    function renderList() {
+      const host = document.getElementById('pending-list');
+      document.getElementById('list-meta').textContent = `${pagination.total || 0} 项，当前页 ${currentItems.length} 项`;
+      document.getElementById('pending-stats-chip').textContent = `${pagination.total || 0} 个待验证项`;
+      document.getElementById('page-chip').textContent = `第 ${pagination.page || currentPage} 页 / ${Math.max(1, Math.ceil((pagination.total || 0) / PAGE_SIZE))} 页`;
+      document.getElementById('prev-page').disabled = currentPage <= 1;
+      document.getElementById('next-page').disabled = currentPage >= Math.ceil((pagination.total || 0) / PAGE_SIZE);
+
+      if (!currentItems.length) {
+        host.innerHTML = '<div class="empty-note">当前筛选下没有待验证项。</div>';
+        renderDetail(null);
+        return;
+      }
+
+      host.innerHTML = currentItems.map(item => `
+        <div class="stack-item ${Number(selectedId) === Number(item.id) ? 'selected' : ''}" data-id="${item.id}">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(item.display_lineage || item.display_title || item.provisional_name || item.raw_value)}</div>
+            ${kindChip(item)}
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_reason || '', 110))}</div>
+          <div class="chip-row">
+            <span class="chip">${window.DashboardShared.escapeHtml(item.identity_key || `pending:${item.id}`)}</span>
+            <span class="chip success">出现 ${item.occurrence_count || 0} 次</span>
+            <span class="chip">L2 ${item.proto_reference_count || 0}</span>
+            <span class="chip">L3 ${item.event_reference_count || 0}</span>
+            ${item.parent_entity_name ? `<span class="chip info">parent ${window.DashboardShared.escapeHtml(item.parent_entity_name)}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      host.querySelectorAll('[data-id]').forEach(element => {
+        element.addEventListener('click', () => {
+          selectedId = Number(element.dataset.id);
+          renderList();
+          renderDetail(selectedItem());
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      if (!item) {
+        document.getElementById('detail-title').textContent = '选择一个待验证项';
+        document.getElementById('detail-meta').textContent = '查看证据、LLM 建议并执行人工巡检。';
+        document.getElementById('detail-chips').innerHTML = '';
+        document.getElementById('detail-body').textContent = '左侧选择一项后，这里会展示 identity key、原始文本、引用计数和最近巡检结果。';
+        document.getElementById('review-output').textContent = '';
+        return;
+      }
+
+      document.getElementById('detail-title').textContent = item.display_title || item.provisional_name || item.raw_value;
+      document.getElementById('detail-meta').textContent = item.display_subtitle || '';
+      document.getElementById('detail-chips').innerHTML = `
+        ${kindChip(item)}
+        <span class="chip">${window.DashboardShared.escapeHtml(item.status || 'pending')}</span>
+        <span class="chip">新闻 ${item.news_reference_count || 0}</span>
+      `;
+      document.getElementById('detail-body').innerHTML = `
+        <div class="stack-list">
+          <div class="lineage-card"><h4>Identity</h4><div>${window.DashboardShared.escapeHtml(item.identity_key || `pending:${item.id}`)}</div></div>
+          <div class="lineage-card"><h4>原始文本</h4><div>${window.DashboardShared.escapeHtml(item.raw_value || '')}</div></div>
+          <div class="lineage-card"><h4>类型</h4><div>${window.DashboardShared.escapeHtml([item.role_label, item.provisional_type, item.entity_subtype].filter(Boolean).join(' · ') || '未指定')}</div></div>
+          <div class="lineage-card"><h4>巡检状态</h4><div>${window.DashboardShared.escapeHtml(item.audit_decision || '尚未巡检')} ${item.audit_reason ? `· ${window.DashboardShared.escapeHtml(item.audit_reason)}` : ''}</div></div>
+        </div>
+      `;
+      const hierarchyCard = `
+        <div class="lineage-card"><h4>Hierarchy</h4><div>${window.DashboardShared.escapeHtml(item.parent_entity_name ? `${item.provisional_name || item.raw_value} -> ${item.parent_entity_name}` : 'No parent entity')}</div></div>
+        <div class="lineage-card"><h4>Subtype</h4><div>${window.DashboardShared.escapeHtml(item.entity_subtype || 'No subtype')}</div></div>
+      `;
+      document.querySelector('#detail-body .stack-list')?.insertAdjacentHTML('beforeend', hierarchyCard);
+      document.getElementById('canonical-name-input').value = item.provisional_name || item.raw_value || '';
+      document.getElementById('type-input').value = item.provisional_type || (item.item_kind === 'action' ? 'custom' : 'organization');
+      document.getElementById('parent-entity-input').value = item.parent_entity_name || '';
+      document.getElementById('entity-subtype-input').value = item.entity_subtype || '';
+    }
+
+    async function loadPage(page = 1) {
+      currentPage = page;
+      document.getElementById('pending-list').innerHTML = '<div class="empty-note">加载中...</div>';
+      const response = await api.getDashboardPendingNormalizations(currentPage, PAGE_SIZE, filters());
+      currentItems = response.data || [];
+      pagination = response.pagination || { total: currentItems.length, page: currentPage, limit: PAGE_SIZE };
+      selectedId = currentItems[0]?.id || null;
+      renderList();
+      renderDetail(selectedItem());
+    }
+
+    async function withSelected(action) {
+      const item = selectedItem();
+      if (!item) return;
+      document.getElementById('review-output').textContent = '执行中...';
+      try {
+        const result = await action(item);
+        const lines = [JSON.stringify(result, null, 2)];
+        const rebuild = result?.rebuild || null;
+        const rebuildJobId = result?.rebuild_job_id || rebuild?.rebuild_job_id || rebuild?.id || null;
+        const rebuildStatus = result?.rebuild_status || rebuild?.rebuild_status || rebuild?.status || null;
+        if (rebuildJobId || rebuildStatus) {
+          lines.push(`\n[Rebuild Job] id=${rebuildJobId || 'n/a'} status=${rebuildStatus || 'n/a'}`);
+        }
+        document.getElementById('review-output').textContent = lines.join('\n');
+        if (result?.cancelled) return;
+        await loadPage(currentPage);
+      } catch (error) {
+        document.getElementById('review-output').textContent = `操作失败: ${error.message}`;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      window.DashboardShared.syncNavLinks(window.DashboardShared.loadGlobalFilters());
+      document.getElementById('reload-btn').addEventListener('click', () => loadPage(1));
+      document.getElementById('kind-filter').addEventListener('change', () => loadPage(1));
+      document.getElementById('status-filter').addEventListener('change', () => loadPage(1));
+      document.getElementById('prev-page').addEventListener('click', () => loadPage(Math.max(1, currentPage - 1)));
+      document.getElementById('next-page').addEventListener('click', () => loadPage(currentPage + 1));
+      document.getElementById('llm-review-btn').addEventListener('click', () => withSelected(item => api.reviewPendingNormalization(item.id, { apply: false, contextLimit: 5 })));
+      document.getElementById('promote-btn').addEventListener('click', () => withSelected(item => {
+        if (!window.confirm('确认将该待验证项新增/提升到标准库，并重建受影响链路吗？')) return Promise.resolve({ cancelled: true });
+        const name = document.getElementById('canonical-name-input').value || item.provisional_name || item.raw_value;
+        const type = document.getElementById('type-input').value || item.provisional_type;
+        const reason = document.getElementById('reason-input').value || 'Manual dashboard promotion';
+        const parentEntity = document.getElementById('parent-entity-input').value || item.parent_entity_name || '';
+        const entitySubtype = document.getElementById('entity-subtype-input').value || item.entity_subtype || '';
+        return api.promotePendingNormalization(item.id, item.item_kind === 'action'
+          ? { actionKey: name, actionCategory: type || 'custom', reason, rebuild: true, asyncRebuild: true }
+          : { canonicalName: name, entityType: type || 'organization', parentEntity, entitySubtype, reason, rebuild: true, asyncRebuild: true });
+      }));
+      document.getElementById('reject-btn').addEventListener('click', () => withSelected(item => {
+        if (!window.confirm('确认将该待验证项标记为噪声吗？该操作会保留记录并写入巡检原因，不触发重建。')) return Promise.resolve({ cancelled: true });
+        return api.rejectPendingNormalization(item.id, {
+          reason: document.getElementById('reason-input').value || 'Manual dashboard noise mark (record retained)',
+          rebuild: false,
+          asyncRebuild: true,
+        });
+      }));
+      await loadPage(1);
+    });
+  </script>
+</body>
+</html>

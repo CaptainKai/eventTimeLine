@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard UI Example - Mock Data</title>
+  <style>
+    /* ===== 复用 dashboard 正式样式 ===== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+      color: #e0e0e0;
+      line-height: 1.6;
+    }
+    header {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 1rem 2rem;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    h1 { font-size: 2rem; font-weight: 300; letter-spacing: 1px; color: #00d4ff; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+    .card {
+      background: rgba(20, 25, 45, 0.7);
+      border-radius: 12px;
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .console-layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      height: calc(100vh - 80px);
+      gap: 1.5rem;
+      padding: 0 1.5rem 1.5rem;
+    }
+    .source-dock {
+      display: flex; flex-direction: column; gap: 1.5rem; height: 100%; overflow: hidden;
+    }
+    .dock-header {
+      padding: 1rem; background: rgba(255,255,255,0.03);
+      border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+    }
+    .news-ticker-wrap {
+      height: 40px; overflow: hidden; background: rgba(0,0,0,0.2);
+      border-radius: 6px; margin-top: 0.8rem; position: relative;
+    }
+    .news-feed-scroll { flex: 1; overflow-y: auto; padding-right: 8px; }
+    .command-center {
+      display: flex; flex-direction: column; gap: 1.5rem; height: 100%; overflow: hidden;
+    }
+    .analysis-zone { height: 55%; }
+    .event-deck { flex: 1; min-height: 0; }
+    .analysis-card, .event-pool-card {
+      height: 100%; display: flex; flex-direction: column; margin: 0 !important;
+    }
+    .view-viewport { flex: 1; min-height: 0; position: relative; }
+    .view-pane {
+      height: 100%; min-height: 0; display: none; overflow: auto;
+    }
+    .view-pane.active {
+      display: flex; flex-direction: column;
+    }
+    /* ===== Graph view 关键修复 ===== */
+    #graph-view { flex: 1; min-height: 0; }
+    #graph-view #graph-container { flex: 1; min-height: 0; }
+    #graph-view #graph-container svg { width: 100% !important; height: 100% !important; display: block; }
+    #story-view { flex: 1; min-height: 0; }
+    .event-scroll-area { flex: 1; overflow-y: auto; padding-right: 10px; }
+    .event-item {
+      padding: 1rem; margin-bottom: 0.8rem; background: rgba(255,255,255,0.05);
+      border-radius: 8px; border-left: 3px solid #00d4ff; cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .event-item:hover { background: rgba(255,255,255,0.1); }
+    .event-title { font-weight: 600; margin-bottom: 0.5rem; color: #00d4ff; }
+    .event-meta { font-size: 0.875rem; color: #a0a0a0; }
+    .loading { display: flex; align-items: center; justify-content: center; height: 120px; color: #00d4ff; }
+    .spinner {
+      border: 2px solid rgba(0,212,255,0.3); border-top: 2px solid #00d4ff;
+      border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin-right: 0.75rem;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .section-header {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;
+      color: #888; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 0.5rem;
+    }
+    .view-btn {
+      padding: 4px 12px; font-size: 0.75rem; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2); color: #ccc; cursor: pointer;
+      border-radius: 4px; transition: all 0.2s;
+    }
+    .view-btn:hover { background: rgba(0,212,255,0.2); }
+    .view-btn.active { background: #00d4ff; color: #000; box-shadow: 0 0 15px rgba(0,212,255,0.4); }
+    .analysis-header { display: flex; justify-content: space-between; align-items: center; }
+    .view-controls { display: flex; gap: 0.5rem; }
+    .pool-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .pool-stats { font-size: 0.8rem; color: #888; }
+    .news-item-card {
+      padding: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;
+      transition: background 0.2s;
+    }
+    .news-item-card:hover { background: rgba(255,255,255,0.05); }
+    .news-item-title { font-weight: 600; font-size: 0.9rem; color: #e0e0e0; }
+    .news-item-time { font-size: 0.75rem; color: #666; margin-top: 2px; }
+    @media (max-width: 1200px) {
+      .console-layout { grid-template-columns: 1fr; height: auto; }
+      .source-dock, .command-center { height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>Dashboard UI Example (Mock)</h1>
+      <span style="font-size: 0.85rem; color: #888;">无需后端，纯前端 mock 数据</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="console-layout">
+      <!-- 左侧：情报源 -->
+      <aside class="source-dock">
+        <div class="dock-header">
+          <h3>实时情报源 (L1)</h3>
+          <div class="news-ticker-wrap">
+            <div class="news-ticker" style="padding: 8px 0; white-space: nowrap; animation: ticker 20s linear infinite;">
+              <span style="color: #00d4ff;">Breaking: Market volatility increases amid geopolitical tensions</span>
+              &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+              <span style="color: #7bed9f;">UPDATE: Diplomatic talks scheduled for next week</span>
+              &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+              <span style="color: #ffa502;">ALERT: Protest activity reported in multiple regions</span>
+            </div>
+          </div>
+        </div>
+        <div class="dock-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+          <div class="section-header">历史报道流</div>
+          <div class="news-feed-scroll" id="news-list">
+            <!-- Mock news items -->
+            <div class="news-item-card">
+              <div class="news-item-title">USA announces new trade policy framework</div>
+              <div class="news-item-time">Reuters • 2026-04-26 10:30</div>
+            </div>
+            <div class="news-item-card">
+              <div class="news-item-title">CHN responds to tariff escalation with countermeasures</div>
+              <div class="news-item-time">Xinhua • 2026-04-26 09:15</div>
+            </div>
+            <div class="news-item-card">
+              <div class="news-item-title">RUS holds military exercises near border region</div>
+              <div class="news-item-time">TASS • 2026-04-25 18:00</div>
+            </div>
+            <div class="news-item-card">
+              <div class="news-item-title">EU calls for diplomatic resolution to regional conflict</div>
+              <div class="news-item-time">AFP • 2026-04-25 14:22</div>
+            </div>
+            <div class="news-item-card">
+              <div class="news-item-title">FRA proposes new sanctions package at UN Security Council</div>
+              <div class="news-item-time">Le Monde • 2026-04-25 11:45</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 右侧：指挥中心 -->
+      <main class="command-center">
+        <!-- 上层：态势分析 -->
+        <section class="analysis-zone">
+          <div class="card analysis-card">
+            <div class="analysis-header">
+              <h2>态势分析中心 (L4-L6)</h2>
+              <div class="view-controls">
+                <button class="view-btn active" data-view="timeline">趋势</button>
+                <button class="view-btn" data-view="graph">关系</button>
+                <button class="view-btn" data-view="story">叙事</button>
+              </div>
+            </div>
+            <div id="main-view-container" class="view-viewport">
+              <!-- Timeline View -->
+              <div id="timeline-view" class="view-pane active">
+                <div id="timeline-chart" style="padding: 1rem;">
+                  <div style="text-align:center; color: #888; padding: 3rem;">
+                    <p style="font-size: 1.2rem;">📈 Timeline View (Mock)</p>
+                    <p style="margin-top: 0.5rem;">事件数量趋势图 - 用 Chart.js 渲染</p>
+                  </div>
+                </div>
+              </div>
+              <!-- Graph View -->
+              <div id="graph-view" class="view-pane">
+                <div id="graph-container"></div>
+              </div>
+              <!-- Story View -->
+              <div id="story-view" class="view-pane">
+                <div id="story-board-container" style="height: 100%; overflow-y: auto; padding: 1rem;">
+                  <div style="text-align:center; color: #888; padding: 3rem;">
+                    <p style="font-size: 1.2rem;">📖 Story Board (Mock)</p>
+                    <p style="margin-top: 0.5rem;">叙事链展示 - L5/L6 故事线</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 下层：事件池 -->
+        <section class="event-deck">
+          <div class="card event-pool-card">
+            <div class="pool-header">
+              <h3>聚合事件池 (L3 Canonical Events)</h3>
+              <div class="pool-stats" id="pool-stats">共 5 个事件</div>
+            </div>
+            <div class="event-scroll-area" id="event-list">
+              <div class="event-item" data-id="1">
+                <div class="event-title">Trade War Escalation</div>
+                <div class="event-meta">
+                  <span>类型: Fight</span> • <span>重要性: 0.85</span> • <span>新闻: 23篇</span>
+                </div>
+              </div>
+              <div class="event-item" data-id="2">
+                <div class="event-title">Diplomatic Negotiations</div>
+                <div class="event-meta">
+                  <span>类型: Consult</span> • <span>重要性: 0.72</span> • <span>新闻: 15篇</span>
+                </div>
+              </div>
+              <div class="event-item" data-id="3">
+                <div class="event-title">Border Military Exercises</div>
+                <div class="event-meta">
+                  <span>类型: Protest</span> • <span>重要性: 0.65</span> • <span>新闻: 18篇</span>
+                </div>
+              </div>
+              <div class="event-item" data-id="4">
+                <div class="event-title">UN Security Council Statement</div>
+                <div class="event-meta">
+                  <span>类型: Make statement</span> • <span>重要性: 0.58</span> • <span>新闻: 12篇</span>
+                </div>
+              </div>
+              <div class="event-item" data-id="5">
+                <div class="event-title">Cross-Strait Naval Confrontation</div>
+                <div class="event-meta">
+                  <span>类型: Assault</span> • <span>重要性: 0.91</span> • <span>新闻: 31篇</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- D3.js 依赖 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <script>
+  // ===== Mock Data =====
+  const MOCK_GRAPH = {
+    nodes: [
+      { id: 1, name: '贸易战升级', type: 'Fight', importance: 0.85, total_news_count: 23, start_time: '2026-04-20' },
+      { id: 2, name: '外交谈判', type: 'Consult', importance: 0.72, total_news_count: 15, start_time: '2026-04-21' },
+      { id: 3, name: '边境军演', type: 'Protest', importance: 0.65, total_news_count: 18, start_time: '2026-04-22' },
+      { id: 4, name: '联合国声明', type: 'Make statement', importance: 0.58, total_news_count: 12, start_time: '2026-04-23' },
+      { id: 5, name: '海峡对峙', type: 'Assault', importance: 0.91, total_news_count: 31, start_time: '2026-04-24' },
+      { id: 6, name: '经济制裁', type: 'Fight', importance: 0.78, total_news_count: 20, start_time: '2026-04-19' },
+      { id: 7, name: '和平倡议', type: 'Consult', importance: 0.45, total_news_count: 8, start_time: '2026-04-25' },
+    ],
+    links: [
+      { source: 1, target: 2, type: 'cause_effect', weight: 3 },
+      { source: 1, target: 3, type: 'evolution', weight: 2 },
+      { source: 1, target: 6, type: 'parent_child', weight: 4 },
+      { source: 2, target: 4, type: 'cause_effect', weight: 2 },
+      { source: 3, target: 5, type: 'trigger', weight: 3 },
+      { source: 4, target: 7, type: 'cause_effect', weight: 1 },
+      { source: 5, target: 6, type: 'related', weight: 2 },
+      { source: 6, target: 3, type: 'temporal', weight: 1 },
+      { source: 7, target: 2, type: 'sub_event', weight: 1 },
+    ]
+  };
+
+  // ===== Graph Rendering =====
+  class EventGraph {
+    constructor(containerId) {
+      this.container = document.getElementById(containerId);
+      this.simulation = null;
+    }
+
+    render(nodes, links) {
+      this.container.innerHTML = '';
+      const width = this.container.clientWidth || 800;
+      const height = this.container.clientHeight || 400;
+
+      const svg = d3.select(this.container)
+        .append('svg')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('viewBox', [0, 0, width, height])
+        .style('display', 'block');
+
+      const g = svg.append('g');
+
+      svg.call(d3.zoom().on('zoom', (event) => {
+        g.attr('transform', event.transform);
+      }));
+
+      this.simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2));
+
+      // ---- 边 ----
+      const link = g.append('g')
+        .attr('stroke', '#444')
+        .attr('stroke-opacity', 0.6)
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 2))
+        .attr('stroke', d => this.getLinkColor(d.type));
+
+      // ---- 节点 ----
+      const node = g.append('g')
+        .selectAll('g')
+        .data(nodes)
+        .join('g')
+        .call(this.drag(this.simulation));
+
+      node.append('circle')
+        .attr('r', d => Math.sqrt(d.importance) * 12 || 6)
+        .attr('fill', d => this.getColor(d.type));
+
+      node.append('title')
+        .text(d => `${d.name}\n类型: ${d.type}\n重要性: ${Number(d.importance || 0).toFixed(2)}`);
+
+      node.append('text')
+        .attr('x', 12)
+        .attr('y', 4)
+        .text(d => this.truncateText(d.name, 15))
+        .style('fill', '#e0e0e0')
+        .style('font-size', '10px');
+
+      // ---- 边标签 ----
+      const linkText = g.append('g')
+        .selectAll('text')
+        .data(links)
+        .join('text')
+        .attr('class', 'link-label')
+        .style('font-size', '9px')
+        .style('fill', '#aaa')
+        .style('pointer-events', 'none')
+        .text(d => this.getLinkTypeName(d.type));
+
+      // ---- Tick ----
+      this.simulation.on('tick', () => {
+        link
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+
+        linkText
+          .attr('x', d => (d.source.x + d.target.x) / 2)
+          .attr('y', d => (d.source.y + d.target.y) / 2);
+      });
+
+      this.addLegend(svg);
+    }
+
+    drag(simulation) {
+      function dragstarted(event) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+      }
+      function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+      }
+      function dragended(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+      }
+      return d3.drag()
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended);
+    }
+
+    getColor(type) {
+      const c = { 'Fight': '#ff4757', 'Protest': '#ffa502', 'Assault': '#eb4d4b', 'Consult': '#70a1ff', 'Make statement': '#2ed573' };
+      return c[type] || '#00d4ff';
+    }
+
+    getLinkColor(type) {
+      const c = { 'parent_child': '#70a1ff', 'cause_effect': '#ff6b81', 'evolution': '#ffa502', 'related': '#7bed9f', 'trigger': '#ff9f43', 'temporal': '#a55eea', 'sub_event': '#2ed573' };
+      return c[type] || '#666';
+    }
+
+    getLinkTypeName(type) {
+      const n = { 'parent_child': '父子', 'cause_effect': '因果', 'evolution': '演变', 'related': '相关', 'trigger': '触发', 'temporal': '时间', 'sub_event': '子事件' };
+      return n[type] || type;
+    }
+
+    truncateText(text, max) {
+      if (!text) return '';
+      return text.length <= max ? text : text.substring(0, max - 1) + '…';
+    }
+
+    addLegend(svg) {
+      const data = [
+        { type: 'parent_child', name: '父子关系' },
+        { type: 'cause_effect', name: '因果关系' },
+        { type: 'evolution', name: '演变关系' },
+        { type: 'trigger', name: '触发关系' },
+        { type: 'temporal', name: '时间关系' },
+        { type: 'sub_event', name: '子事件' },
+        { type: 'related', name: '相关关系' }
+      ];
+      const legend = svg.append('g').attr('transform', 'translate(10, 10)');
+      legend.append('rect')
+        .attr('x', -5).attr('y', -5)
+        .attr('width', 150).attr('height', data.length * 20 + 10)
+        .attr('fill', 'rgba(10,14,39,0.9)').attr('stroke', 'rgba(255,255,255,0.2)').attr('rx', 6);
+      data.forEach((item, i) => {
+        const g = legend.append('g').attr('transform', `translate(0,${i * 20})`);
+        g.append('line').attr('x1', 0).attr('y1', 8).attr('x2', 25).attr('y2', 8)
+          .attr('stroke', this.getLinkColor(item.type)).attr('stroke-width', 2);
+        g.append('text').attr('x', 30).attr('y', 11).text(item.name)
+          .style('fill', '#e0e0e0').style('font-size', '11px');
+      });
+    }
+  }
+
+  // ===== 视图切换 =====
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      document.querySelectorAll('.view-pane').forEach(pane => {
+        pane.classList.remove('active');
+        if (pane.id === `${view}-view`) {
+          pane.classList.add('active');
+          if (view === 'graph') {
+            const graph = new EventGraph('graph-container');
+            graph.render(MOCK_GRAPH.nodes, MOCK_GRAPH.links);
+          }
+        }
+      });
+    });
+  });
+
+  // 页面加载后立即渲染 graph（因为 example 默认可以切换到 graph 查看）
+  // 延迟确保 DOM 尺寸计算完成
+  setTimeout(() => {
+    const graph = new EventGraph('graph-container');
+    graph.render(MOCK_GRAPH.nodes, MOCK_GRAPH.links);
+  }, 300);
+
+  // ===== 窗口 resize 时重新渲染 graph =====
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const graph = new EventGraph('graph-container');
+      graph.render(MOCK_GRAPH.nodes, MOCK_GRAPH.links);
+    }, 250);
+  });
+  </script>
+</body>
+</html>

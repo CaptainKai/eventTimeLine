@@ -1,0 +1,183 @@
+features:
+  - name: 统一新闻处理管道
+    description: 所有数据源的新闻统一通过 pipeline 处理，流程：入库 news → 获取 newsId → 解析 → 入库 L2-L6
+    entrypoints:
+      - path: lib/pipeline/news-pipeline.mjs
+        reason: 核心入口，统一处理所有新闻
+
+    flow:
+      - apis/sources/*.mjs -> lib/pipeline/news-pipeline.mjs -> lib/db/news-queries.mjs
+      - lib/pipeline/news-pipeline.mjs -> lib/pipeline/parser-selector.mjs -> lib/pipeline/event-ingestion.mjs
+
+    touchpoints:
+      - lib/pipeline/news-pipeline.mjs
+      - lib/pipeline/parser-selector.mjs
+      - lib/pipeline/event-ingestion.mjs
+      - lib/db/news-queries.mjs
+
+  - name: 事件分类配置
+    description: 共享的事件类型、动作标签、实体归一化配置，LLM parser 和后处理 pipeline 共用
+    entrypoints:
+      - path: lib/config/event-taxonomy.mjs
+        reason: 统一配置，修改一处全局生效
+
+    touchpoints:
+      - lib/config/event-taxonomy.mjs
+      - apis/parsers/llm-parser.mjs
+      - lib/pipeline/post-processing.mjs
+
+  - name: 数据源适配器
+    description: 各数据源只负责获取数据和格式转换，调用统一 pipeline
+    entrypoints:
+      - path: apis/sources/jin10.mjs
+        reason: 金十快讯数据源
+      - path: apis/sources/gdelt.mjs
+        reason: GDELT 事件数据源
+      - path: apis/sources/newsminimalist.mjs
+        reason: NewsMinimalist RSS 数据源
+      - path: apis/sources/rss-news.mjs
+        reason: 自定义 RSS 数据源
+
+    pattern: |
+      每个 数据源实现 toItemData(item) 转换函数，然后调用 processNewsArticle(newsData)
+
+    touchpoints:
+      - apis/sources/jin10.mjs
+      - apis/sources/gdelt.mjs
+      - apis/sources/newsminimalist.mjs
+      - apis/sources/rss-news.mjs
+
+  - name: LLM 解析器
+    description: 使用 LLM 从新闻中提取原子事件，结果存入 llm_parse_results 表
+    entrypoints:
+      - path: apis/parsers/llm-parser.mjs
+        reason: LLM 解析器，需要 newsId 才会存储结果
+
+    flow:
+      - lib/pipeline/parser-selector.mjs -> apis/parsers/llm-parser.mjs -> lib/db/llm-parse-queries.mjs
+
+    touchpoints:
+      - apis/parsers/llm-parser.mjs
+      - lib/db/llm-parse-queries.mjs
+      - lib/config/event-taxonomy.mjs
+
+    note: 必须传入 newsId 才会存储 LLM 解析结果到数据库
+
+  - name: 解析器选择
+    description: 根据 source 和 importance 选择合适的解析器
+    entrypoints:
+      - path: lib/pipeline/parser-selector.mjs
+        reason: 解析器路由，决定是否使用 LLM
+
+    flow:
+      - lib/pipeline/news-pipeline.mjs -> lib/pipeline/parser-selector.mjs -> apis/parsers/*.mjs
+
+    config:
+      - config.mjs 中的 parser.sourceConfig.[source].preferLLMWhenImportanceAbove
+
+    touchpoints:
+      - lib/pipeline/parser-selector.mjs
+      - config.mjs
+
+  - name: 在线聚类算法 (L2→L3)
+    description: 基于相似度将原子事件合并到标准事件
+    entrypoints:
+      - path: lib/analysis/canonical-merger.mjs
+        reason: 在线聚类引擎，实现增量聚类
+
+    flow:
+      - lib/pipeline/event-ingestion.mjs -> lib/analysis/canonical-merger.mjs -> lib/db/events-queries.mjs
+
+    touchpoints:
+      - lib/analysis/canonical-merger.mjs
+      - lib/db/events-queries.mjs
+      - lib/db/entity-queries.mjs
+
+    algorithm:
+      candidate_selection:
+        time_window_days: 7
+        min_entity_overlap: 0.2
+      similarity:
+        formula: "0.4 * entityOverlap + 0.3 * actionMatch + 0.3 * timeDecay"
+        threshold: 0.5
+      strategy: greedy_merge
+
+  - name: 事件关系分析 (L4)
+    description: 自动分析事件间的因果、时序、父子、触发等关系类型，构建事件图
+    entrypoints:
+      - path: lib/analysis/event-relationship-analyzer.mjs
+        reason: 事件关系分析引擎
+
+    flow:
+      - lib/pipeline/event-ingestion.mjs -> lib/analysis/event-relationship-analyzer.mjs -> lib/db/event-relationships-queries.mjs
+
+    touchpoints:
+      - lib/analysis/event-relationship-analyzer.mjs
+      - lib/db/event-relationships-queries.mjs
+
+    relationship_types:
+      - parent_child: 父子关系
+      - cause_effect: 因果关系
+      - evolution: 演变关系
+      - trigger: 触发关系
+      - temporal: 时间关系
+      - sub_event: 子事件
+      - related: 相关关系
+
+  - name: 叙事管理 (L5)
+    description: 聚合相关事件为叙事
+    entrypoints:
+      - path: lib/analysis/story-manager.mjs
+        reason: 叙事管理器
+
+    flow:
+      - apis/orchestrator.mjs -> lib/analysis/story-manager.mjs -> lib/db/intelligence-queries.mjs
+
+    touchpoints:
+      - lib/analysis/story-manager.mjs
+      - lib/db/intelligence-queries.mjs
+      - api/v1/intelligence.mjs
+
+  - name: 推演引擎 (L6)
+    description: 生成和验证假设
+    entrypoints:
+      - path: lib/analysis/inference-engine.mjs
+        reason: 推演引擎
+
+    flow:
+      - lib/pipeline/event-ingestion.mjs -> lib/analysis/inference-engine.mjs
+      - apis/orchestrator.mjs -> lib/analysis/inference-engine.mjs
+
+    touchpoints:
+      - lib/analysis/inference-engine.mjs
+      - lib/db/intelligence-queries.mjs
+
+  - name: 数据库关系检查
+    description: 检查外键关系完整性
+    entrypoints:
+      - path: debug/check-database-relations.mjs
+        reason: 检查脚本
+
+    tables:
+      L1_news: news
+      L2_proto_events: proto_events (news_id → news.id, canonical_event_id → events.id)
+      L3_events: events (story_id → stories.id)
+      L4_relationships: event_relationships
+      L5_stories: stories
+      L6_hypotheses: hypotheses (story_id → stories.id)
+      llm_results: llm_parse_results (news_id → news.id)
+
+    reference: docs/database-schema.md
+
+  - name: LLM 结果补充脚本
+    description: 对历史数据补充 LLM 解析结果
+    entrypoints:
+      - path: scripts/backfill-llm-recent.mjs
+        reason: 补充最近的 LLM 解析结果
+      - path: scripts/reparse-jin10-llm.mjs
+        reason: 重新解析 jin10 重要新闻
+
+    touchpoints:
+      - scripts/backfill-llm-recent.mjs
+      - scripts/reparse-jin10-llm.mjs
+      - lib/db/llm-parse-queries.mjs

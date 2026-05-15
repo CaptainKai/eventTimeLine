@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知识图谱 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <!-- 引入 Graphology 和 Sigma.js v2 -->
+  <script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
+  <style>
+    .sigma-container {
+      width: 100%;
+      height: 100%;
+      min-height: 600px; /* 添加最小高度，防止 CSS 高度塌陷导致图谱渲染为空白 */
+      background: #0b111a;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    .graph-controls {
+      position: absolute;
+      bottom: 1rem;
+      right: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 10;
+    }
+    .control-btn {
+      background: rgba(0, 212, 255, 0.2);
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+    .control-btn:hover {
+      background: rgba(0, 212, 255, 0.4);
+    }
+    .node-label-bg {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 6px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/knowledge-graph.html" class="nav-link active" data-dashboard-nav>知识图谱</a>
+      <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">L1-L6 Hermes Visualization</div>
+        <h2>关系层知识图谱</h2>
+        <p>参考 Hermes 方案：初始展示关系层节点（叙事集群），点击节点展开内部关系簇。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip info" id="graph-status">初始化中...</span>
+      </div>
+    </section>
+
+    <section class="global-filter-bar hero-bar">
+      <div style="width: 100%;">
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label for="filter-start-date">开始日期</label>
+            <input type="date" id="filter-start-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-end-date">结束日期</label>
+            <input type="date" id="filter-end-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-lang">语言</label>
+            <select id="filter-lang">
+              <option value="">全部语言</option>
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-source">来源</label>
+            <select id="filter-source">
+              <option value="">全部来源</option>
+              <option value="gdelt">GDELT</option>
+              <option value="jin10">金十数据</option>
+              <option value="newsminimalist">NewsMinimalist</option>
+              <option value="rss">RSS</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="apply-filters">应用筛选</button>
+            <button id="reset-view" style="background: rgba(255,255,255,0.1);">重置视图</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="three-column-layout">
+      <aside class="list-card">
+        <div class="section-head">
+          <div>
+            <h3>节点列表</h3>
+            <p id="list-meta">加载中...</p>
+          </div>
+        </div>
+        <div class="list-scroll-area" id="node-list"></div>
+      </aside>
+
+      <section class="visual-canvas">
+        <div class="sigma-container" id="sigma-host">
+          <div class="graph-controls">
+            <button class="control-btn" id="zoom-in">+</button>
+            <button class="control-btn" id="zoom-out">-</button>
+            <button class="control-btn" id="zoom-reset">⟲</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector-card">
+        <div class="section-head">
+          <div>
+            <h3>Inspector</h3>
+            <p id="inspector-meta">选择节点查看详情</p>
+          </div>
+        </div>
+        <div class="inspector-scroll-area" id="inspector-body">
+          <div class="empty-note">点击节点或边以查看详细情报</div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script>
+    const api = window.apiClient;
+    let graph = new graphology.Graph();
+    let renderer = null;
+    let expandedSummaries = new Set();
+
+    async function initGraph() {
+      const container = document.getElementById('sigma-host');
+      
+      renderer = new Sigma(graph, container, {
+        renderEdgeLabels: true,
+        defaultEdgeType: "arrow",
+        labelFont: "Outfit, Inter, sans-serif",
+        labelSize: 11,
+        labelColor: { color: "#d7e3f5" },
+        stagePadding: 50,
+      });
+
+      // 交互监听
+      renderer.on("clickNode", ({ node }) => {
+        const attr = graph.getNodeAttributes(node);
+        showInspector(attr);
+        if (attr.nodeType === 'summary') {
+          if (expandedSummaries.has(node)) {
+            collapseSummary(node);
+          } else {
+            expandSummary(node);
+          }
+        }
+      });
+
+      document.getElementById('zoom-in').addEventListener('click', () => renderer.getCamera().animatedZoom());
+      document.getElementById('zoom-out').addEventListener('click', () => renderer.getCamera().animatedUnzoom());
+      document.getElementById('zoom-reset').addEventListener('click', () => renderer.getCamera().animatedReset());
+
+      await loadGlobalGraph();
+    }
+
+    function getSummaryColor(memberCount, isIsolated) {
+      if (isIsolated) return '#747d8c';
+      if (memberCount >= 100) return '#ff4757';
+      if (memberCount >= 50) return '#ffa502';
+      if (memberCount >= 20) return '#eccc68';
+      if (memberCount >= 5) return '#2ed573';
+      return '#00d4ff';
+    }
+
+    async function loadGlobalGraph() {
+      document.getElementById('graph-status').textContent = '加载全局关系层...';
+      graph.clear();
+      expandedSummaries.clear();
+
+      try {
+        // 调用新的全局 API (需在 apiClient 中定义)
+        const response = await api.getGlobalRelationshipSummaryGraph({ limit: 100, minMemberCount: 1 });
+        const { nodes, links } = response.data;
+
+        nodes.forEach((n, i) => {
+          const angle = (i / nodes.length) * Math.PI * 2;
+          
+          const memberCount = n.member_count || 1;
+          const nodeColor = getSummaryColor(memberCount, n.summary_kind === 'isolated');
+
+          // 尺寸使用对数，防止过大占据整个屏幕
+          const nodeSize = Math.max(Math.min(Math.log(memberCount + 1) * 3 + 3, 15), 4);
+
+          graph.addNode(String(n.id), {
+            label: n.title || `Summary ${n.id}`,
+            x: Math.cos(angle) * 300,
+            y: Math.sin(angle) * 300,
+            size: nodeSize,
+            color: nodeColor,
+            nodeType: 'summary',
+            data: n
+          });
+        });
+
+        links.forEach(l => {
+          if (graph.hasNode(String(l.source)) && graph.hasNode(String(l.target))) {
+            graph.addEdge(String(l.source), String(l.target), {
+              size: Math.log(l.weight + 1) * 2,
+              color: "rgba(0, 212, 255, 0.2)",
+              label: `${l.weight} 关联`
+            });
+          }
+        });
+
+        // 这里可以使用简单的布局
+        document.getElementById('graph-status').textContent = `已加载 ${nodes.length} 个关系节点`;
+        updateNodeList(nodes, false);
+      } catch (err) {
+        console.error(err);
+        document.getElementById('graph-status').textContent = '加载失败';
+      }
+    }
+
+    function collapseSummary(summaryId) {
+      if (!expandedSummaries.has(summaryId)) return;
+      
+      const nodesToRemove = [];
+      graph.forEachNode((node, attr) => {
+        if (attr.parentSummary === summaryId) {
+          nodesToRemove.push(node);
+        }
+      });
+      
+      nodesToRemove.forEach(n => graph.dropNode(n));
+      expandedSummaries.delete(summaryId);
+      
+      const nData = graph.getNodeAttribute(summaryId, 'data');
+      graph.setNodeAttribute(summaryId, 'color', getSummaryColor(nData.member_count || 1, nData.summary_kind === 'isolated'));
+      
+      document.getElementById('graph-status').textContent = `已收起节点 ${summaryId}`;
+      
+      // 恢复全局列表
+      const globalNodes = [];
+      graph.forEachNode((node, attr) => {
+        if (attr.nodeType === 'summary') globalNodes.push(attr.data);
+      });
+      updateNodeList(globalNodes, false);
+    }
+
+    async function expandSummary(summaryId) {
+      if (expandedSummaries.has(summaryId)) return;
+      
+      const attr = graph.getNodeAttributes(summaryId);
+      document.getElementById('graph-status').textContent = `正在展开 ${attr.label}...`;
+
+      try {
+        // 下钻获取内部原子事件
+        const response = await api.getRelationshipSummaryGraph(summaryId);
+        const { nodes, edges } = response.data;
+
+        const cx = attr.x;
+        const cy = attr.y;
+
+        nodes.forEach((n, i) => {
+          const id = `proto-${n.id}`;
+          if (!graph.hasNode(id)) {
+            const angle = (i / nodes.length) * Math.PI * 2;
+            // 将内部节点紧密环绕在 Summary 节点周围
+            const dist = 30 + Math.random() * 40;
+            graph.addNode(id, {
+              label: n.title || `原子事件 ${n.id}`,
+              x: cx + Math.cos(angle) * dist,
+              y: cy + Math.sin(angle) * dist,
+              size: 3,
+              color: "#ffffff",
+              nodeType: 'proto',
+              parentSummary: summaryId,
+              data: n
+            });
+
+            // 虚线连接到所属 Summary
+            if (!graph.hasEdge(id, summaryId) && !graph.hasEdge(summaryId, id)) {
+              graph.addEdge(id, summaryId, {
+                size: 1,
+                color: "rgba(255, 255, 255, 0.15)",
+                type: 'line' 
+              });
+            }
+          }
+        });
+
+        if (edges) {
+          edges.forEach(l => {
+            const s = `proto-${l.source}`;
+            const t = `proto-${l.target}`;
+            if (graph.hasNode(s) && graph.hasNode(t) && !graph.hasEdge(s, t) && !graph.hasEdge(t, s)) {
+              graph.addEdge(s, t, {
+                label: l.type || '关联',
+                size: Math.min(Math.log(l.weight + 1) + 1, 4),
+                color: "rgba(255, 165, 2, 0.6)",
+                data: l
+              });
+            }
+          });
+        }
+
+        expandedSummaries.add(summaryId);
+        graph.setNodeAttribute(summaryId, 'color', '#2ed573');
+        document.getElementById('graph-status').textContent = `已展开，新增 ${nodes.length} 个原子事件`;
+        updateNodeList(nodes, true);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showInspector(attr) {
+      const body = document.getElementById('inspector-body');
+      const data = attr.data;
+      if (attr.nodeType === 'summary') {
+        body.innerHTML = `
+          <div class="lineage-card">
+            <div class="eyebrow">关系层节点 (L2 Summary)</div>
+            <h4>${data.title}</h4>
+            <p>${data.description || '无描述'}</p>
+            <div class="chip-row">
+              <span class="chip info">${data.member_count} 成员</span>
+              <span class="chip success">${data.edge_count} 内部边</span>
+            </div>
+            <div style="margin-top:1rem">
+              <small>时间范围: ${new Date(data.time_start).toLocaleDateString()} - ${new Date(data.time_end).toLocaleDateString()}</small>
+            </div>
+          </div>
+        `;
+      } else {
+        body.innerHTML = `
+          <div class="lineage-card">
+            <div class="eyebrow">原子事件 (L1 ProtoEvent)</div>
+            <h4>${data.title}</h4>
+            <p>${data.description || '无解析描述'}</p>
+            <div class="chip-row">
+              <span class="chip warn">${data.event_type}</span>
+              <span class="chip">ID: ${data.id}</span>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function updateNodeList(nodes, isProto = false) {
+      const list = document.getElementById('node-list');
+      if (isProto) {
+        document.getElementById('list-meta').textContent = `当前展示内部原子事件`;
+        list.innerHTML = nodes.map(n => `
+          <div class="stack-item" onclick="focusNode('proto-${n.id}')">
+            <div class="item-title" style="font-size:0.85rem">${n.title}</div>
+            <div class="chip-row"><span class="chip warn">${n.event_type || '原子'}</span></div>
+          </div>
+        `).join('');
+      } else {
+        document.getElementById('list-meta').textContent = `关系层节点: ${nodes.length}`;
+        list.innerHTML = nodes.map(n => `
+          <div class="stack-item" onclick="focusNode('${n.id}')">
+            <div class="item-title">${n.title}</div>
+            <div class="chip-row"><span class="chip info">${n.member_count} 成员</span></div>
+          </div>
+        `).join('');
+      }
+    }
+
+    window.focusNode = (id) => {
+      const attr = graph.getNodeAttributes(id);
+      renderer.getCamera().animate({ x: attr.x, y: attr.y, ratio: 0.2 }, { duration: 500 });
+      showInspector(attr);
+    };
+
+    document.getElementById('apply-filters').addEventListener('click', loadGlobalGraph);
+    document.addEventListener('DOMContentLoaded', initGraph);
+  </script>
+</body>
+</html>

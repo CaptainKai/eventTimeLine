@@ -1,0 +1,38 @@
+{
+  "name": "event-timeline-engine",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --trace-warnings server.mjs",
+    "sweep": "node apis/orchestrator.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "migrate": "node scripts/migrate.mjs",
+    "migrate-canonical-id": "node scripts/migrate-add-canonical-id.mjs",
+    "migrate-atomic-graph": "node scripts/run-sql.mjs sql/020_atomic_relationship_graph.sql",
+    "rebuild-atomic-graph": "node scripts/rebuild-atomic-relationship-graph.mjs",
+    "diag": "node diag.mjs",
+    "reset-parsed": "node scripts/reset-parsed-results.mjs",
+    "check-data": "node debug/check-data-integrity.mjs",
+    "check-consistency": "node scripts/check-consistency.mjs check",
+    "fix-consistency": "node scripts/check-consistency.mjs fix",
+    "migrate-atomic-summary-queue": "node scripts/run-sql.mjs sql/021_atomic_summary_queue_refactor.sql",
+    "backfill-atomic-unassigned": "node scripts/backfill-unassigned-atomic-graph.mjs",
+    "migrate-atomic-summary-merge": "node scripts/run-sql.mjs sql/022_atomic_summary_merge.sql",
+    "migrate-atomic-batch-assignment": "node scripts/run-sql.mjs sql/023_atomic_batch_assignment_queue.sql"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.11.0"
+  },
+  "optionalDependencies": {
+    "puppeteer": "^21.0.0",
+    "cheerio": "^1.0.0",
+    "@elastic/elasticsearch": "^8.12.0",
+    "@xenova/transformers": "^2.17.0",
+    "onnxruntime-web": "^1.17.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

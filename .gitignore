@@ -1,0 +1,23 @@
+# 环境变量
+.env
+
+# 运行时数据
+runs/
+!runs/memory/.gitkeep
+
+# Node模块
+node_modules/
+
+# 日志
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+docker-compose.override.yml
+
+venv/
+

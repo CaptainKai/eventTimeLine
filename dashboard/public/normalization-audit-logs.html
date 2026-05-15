@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>巡检日志 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link active" data-dashboard-nav>巡检日志</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">Normalization Audit History</div>
+        <h2>巡检结果日志</h2>
+        <p>按页查看巡检目标、LLM 返回结果和最终决定（新增标准、删除/标记噪声、保持待审、合并）。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip warn" id="total-chip">加载中</span>
+      </div>
+    </section>
+
+    <section class="hero-bar" style="padding: 0.85rem 1rem;">
+      <div class="toolbar-inline">
+        <div class="filter-group">
+          <label for="kind-filter">类型</label>
+          <select id="kind-filter">
+            <option value="">全部</option>
+            <option value="entity">实体</option>
+            <option value="action">动作</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="decision-filter">最终决定</label>
+          <select id="decision-filter">
+            <option value="">全部</option>
+            <option value="promote_to_standard">新增标准</option>
+            <option value="merge_to_existing">合并已有</option>
+            <option value="reject_noise">删除/标记噪声</option>
+            <option value="keep_pending">保持待审</option>
+          </select>
+        </div>
+        <button id="reload-btn">刷新</button>
+      </div>
+      <div class="chip-row">
+        <span class="chip" id="page-chip">第 1 页</span>
+        <button id="prev-page" style="background: rgba(255,255,255,0.1);">上一页</button>
+        <button id="next-page" style="background: rgba(255,255,255,0.1);">下一页</button>
+      </div>
+    </section>
+
+    <section class="workbench-layout">
+      <aside class="list-card">
+        <div class="section-head">
+          <div>
+            <h3>日志列表</h3>
+            <p id="list-meta">按执行时间倒序</p>
+          </div>
+        </div>
+        <div class="list-scroll-area" id="log-list"></div>
+      </aside>
+
+      <section class="detail-layout">
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <h3 id="detail-title">选择一条巡检日志</h3>
+              <p id="detail-meta">右侧会展示巡检目标、LLM 返回与最终决定。</p>
+            </div>
+            <div class="chip-row" id="detail-chips"></div>
+          </div>
+          <div id="detail-body" class="summary-text">左侧选择日志后查看详情。</div>
+        </article>
+
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <h3>LLM 返回结果</h3>
+              <p>展示本次巡检记录中的结构化返回内容。</p>
+            </div>
+          </div>
+          <pre id="llm-result" class="article-preview" style="max-height: 480px; overflow:auto;"></pre>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script>
+    const api = window.apiClient;
+    const PAGE_SIZE = 30;
+    let currentPage = 1;
+    let currentItems = [];
+    let selectedId = null;
+    let pagination = { total: 0, page: 1, limit: PAGE_SIZE };
+
+    function filters() {
+      return {
+        itemKind: document.getElementById('kind-filter').value || '',
+        decision: document.getElementById('decision-filter').value || '',
+      };
+    }
+
+    function selectedItem() {
+      return currentItems.find(item => Number(item.id) === Number(selectedId));
+    }
+
+    function decisionLabel(decision) {
+      if (decision === 'promote_to_standard') return '新增标准';
+      if (decision === 'merge_to_existing') return '合并已有';
+      if (decision === 'reject_noise') return '删除/标记噪声';
+      if (decision === 'keep_pending') return '保持待审';
+      return decision || '未知';
+    }
+
+    function kindLabel(kind) {
+      return kind === 'action' ? '动作' : '实体';
+    }
+
+    function renderList() {
+      const host = document.getElementById('log-list');
+      const totalPages = Math.max(1, Math.ceil((pagination.total || 0) / PAGE_SIZE));
+      document.getElementById('list-meta').textContent = `${pagination.total || 0} 条日志，当前页 ${currentItems.length} 条`;
+      document.getElementById('total-chip').textContent = `${pagination.total || 0} 条巡检记录`;
+      document.getElementById('page-chip').textContent = `第 ${pagination.page || currentPage} 页 / ${totalPages} 页`;
+      document.getElementById('prev-page').disabled = currentPage <= 1;
+      document.getElementById('next-page').disabled = currentPage >= totalPages;
+
+      if (!currentItems.length) {
+        host.innerHTML = '<div class="empty-note">当前筛选下没有巡检日志。</div>';
+        renderDetail(null);
+        return;
+      }
+
+      host.innerHTML = currentItems.map(item => `
+        <div class="stack-item ${Number(selectedId) === Number(item.id) ? 'selected' : ''}" data-id="${item.id}">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(item.display_target || `log:${item.id}`)}</div>
+            <span class="chip">${window.DashboardShared.escapeHtml(kindLabel(item.item_kind))}</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.reason || '', 120))}</div>
+          <div class="chip-row">
+            <span class="chip info">${window.DashboardShared.escapeHtml(decisionLabel(item.decision))}</span>
+            <span class="chip">news ${item.affected_news_count || 0}</span>
+            <span class="chip">event ${item.affected_event_count || 0}</span>
+            <span class="chip">${window.DashboardShared.escapeHtml(window.DashboardShared.formatDate(item.executed_at) || '')}</span>
+          </div>
+        </div>
+      `).join('');
+
+      host.querySelectorAll('[data-id]').forEach(element => {
+        element.addEventListener('click', () => {
+          selectedId = Number(element.dataset.id);
+          renderList();
+          renderDetail(selectedItem());
+        });
+      });
+    }
+
+    function renderDetail(item) {
+      if (!item) {
+        document.getElementById('detail-title').textContent = '选择一条巡检日志';
+        document.getElementById('detail-meta').textContent = '右侧会展示巡检目标、LLM 返回与最终决定。';
+        document.getElementById('detail-chips').innerHTML = '';
+        document.getElementById('detail-body').textContent = '左侧选择日志后查看详情。';
+        document.getElementById('llm-result').textContent = '';
+        return;
+      }
+
+      document.getElementById('detail-title').textContent = item.display_target || `log:${item.id}`;
+      document.getElementById('detail-meta').textContent = `执行时间：${window.DashboardShared.formatDate(item.executed_at)} | 重建状态：${item.rebuild_status || 'skipped'}`;
+      document.getElementById('detail-chips').innerHTML = `
+        <span class="chip">${window.DashboardShared.escapeHtml(kindLabel(item.item_kind))}</span>
+        <span class="chip info">${window.DashboardShared.escapeHtml(decisionLabel(item.decision))}</span>
+        <span class="chip">${window.DashboardShared.escapeHtml(item.pending_status || 'n/a')}</span>
+      `;
+
+      document.getElementById('detail-body').innerHTML = `
+        <div class="stack-list">
+          <div class="lineage-card"><h4>巡检目标</h4><div>${window.DashboardShared.escapeHtml(item.display_target || '')}</div></div>
+          <div class="lineage-card"><h4>目标类型</h4><div>${window.DashboardShared.escapeHtml([kindLabel(item.item_kind), item.pending_role, item.pending_type].filter(Boolean).join(' · ') || '未标注')}</div></div>
+          <div class="lineage-card"><h4>最终决定</h4><div>${window.DashboardShared.escapeHtml(decisionLabel(item.decision))}</div></div>
+          <div class="lineage-card"><h4>决定原因</h4><div>${window.DashboardShared.escapeHtml(item.reason || '无')}</div></div>
+          <div class="lineage-card"><h4>目标写入结果</h4><div>${window.DashboardShared.escapeHtml(item.target_entity_name || item.target_action_name || '无')}</div></div>
+          <div class="lineage-card"><h4>影响范围</h4><div>${window.DashboardShared.escapeHtml(`proto ${item.affected_proto_count || 0} · event ${item.affected_event_count || 0} · story ${item.affected_story_count || 0} · news ${item.affected_news_count || 0}`)}</div></div>
+        </div>
+      `;
+
+      document.getElementById('llm-result').textContent = item.llm_result_text || '{}';
+    }
+
+    async function loadPage(page = 1) {
+      currentPage = page;
+      document.getElementById('log-list').innerHTML = '<div class="empty-note">加载中...</div>';
+      const response = await api.getDashboardNormalizationAuditLogs(currentPage, PAGE_SIZE, filters());
+      currentItems = response.data || [];
+      pagination = response.pagination || { total: currentItems.length, page: currentPage, limit: PAGE_SIZE };
+      selectedId = currentItems[0]?.id || null;
+      renderList();
+      renderDetail(selectedItem());
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      window.DashboardShared.syncNavLinks(window.DashboardShared.loadGlobalFilters());
+      document.getElementById('reload-btn').addEventListener('click', () => loadPage(1));
+      document.getElementById('kind-filter').addEventListener('change', () => loadPage(1));
+      document.getElementById('decision-filter').addEventListener('change', () => loadPage(1));
+      document.getElementById('prev-page').addEventListener('click', () => loadPage(Math.max(1, currentPage - 1)));
+      document.getElementById('next-page').addEventListener('click', () => loadPage(currentPage + 1));
+      await loadPage(1);
+    });
+  </script>
+</body>
+</html>

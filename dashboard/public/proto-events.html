@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新闻解析台 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link active" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">L1 News -> L2 Proto Events</div>
+        <h2>新闻解析台</h2>
+        <p>左侧按新闻查看解析样本，右侧直接阅读该新闻的原子事件提取结果，并快速判断它归属到哪些标准事件与叙事。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip info" id="news-page-stats">加载中</span>
+      </div>
+    </section>
+
+    <section class="global-filter-bar hero-bar">
+      <div style="width: 100%;">
+        <div class="section-head" style="margin-bottom: 0.75rem;">
+          <div>
+            <h2>全局筛选</h2>
+            <p>限定新闻范围后，再用本页局部筛选找多原子事件、LLM 解析或尚未归并的样本。</p>
+          </div>
+        </div>
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label for="filter-start-date">开始日期</label>
+            <input type="date" id="filter-start-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-end-date">结束日期</label>
+            <input type="date" id="filter-end-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-lang">语言</label>
+            <select id="filter-lang">
+              <option value="">全部语言</option>
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-source">来源</label>
+            <select id="filter-source">
+              <option value="">全部来源</option>
+              <option value="gdelt">GDELT</option>
+              <option value="jin10">金十数据</option>
+              <option value="newsminimalist">NewsMinimalist</option>
+              <option value="rss">RSS</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-parser">解析器</label>
+            <select id="filter-parser">
+              <option value="">全部解析器</option>
+              <option value="llm">LLM 解析</option>
+              <option value="traditional">传统解析</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-event-type">事件类型</label>
+            <select id="filter-event-type">
+              <option value="">全部事件类型</option>
+              <option value="Fight">军事冲突</option>
+              <option value="Protest">抗议活动</option>
+              <option value="Assault">袭击事件</option>
+              <option value="Consult">外交磋商</option>
+              <option value="Make statement">发表声明</option>
+              <option value="Demand">提出要求</option>
+              <option value="Threaten">发出威胁</option>
+              <option value="Negotiate">进行谈判</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="apply-filters">应用筛选</button>
+            <button id="clear-filters" style="background: rgba(255,255,255,0.1);">清除</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workbench-layout">
+      <aside class="list-card">
+        <div class="section-head">
+          <div>
+            <h3>新闻列表</h3>
+            <p id="news-list-meta">按发布时间倒序排列</p>
+          </div>
+        </div>
+
+        <div class="toolbar-inline" style="margin-bottom: 0.8rem;">
+          <label class="chip"><input type="checkbox" id="local-llm-only"> 仅 LLM</label>
+          <label class="chip"><input type="checkbox" id="local-multi-proto"> 多原子事件</label>
+          <label class="chip"><input type="checkbox" id="local-unmapped-only"> 未归并标准事件</label>
+        </div>
+
+        <div class="list-scroll-area" id="news-list"></div>
+        <div class="pagination" id="news-pagination" style="justify-content: space-between;"></div>
+      </aside>
+
+      <section class="detail-layout">
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Article</div>
+              <h3 id="article-title">选择一篇新闻</h3>
+              <p id="article-meta" class="muted-text"></p>
+            </div>
+            <div class="chip-row" id="article-chips"></div>
+          </div>
+          <div id="article-content" class="article-preview empty-note">从左侧选择新闻，查看原文摘要与解析结果。</div>
+        </article>
+
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Lineage</div>
+              <h3>归属血统</h3>
+              <p>只显示次级信息，不让 L3/L5 盖过 L2 的解析阅读。</p>
+            </div>
+          </div>
+          <div class="lineage-grid" id="lineage-grid"></div>
+        </article>
+
+        <article class="detail-section-card">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Proto Events</div>
+              <h3 id="proto-title">原子事件解析结果</h3>
+              <p>主行固定展示 actor -> action -> object，次行展示地点、时间、解析器与标准事件链接。</p>
+            </div>
+          </div>
+          <div class="proto-grid" id="proto-events-grid"></div>
+        </article>
+      </section>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script>
+    const api = window.apiClient;
+    let pageState = {
+      page: 1,
+      limit: 40,
+      items: [],
+      selectedNewsId: null,
+    };
+
+    function getLocalFilters() {
+      return {
+        llmOnly: document.getElementById('local-llm-only').checked,
+        multiProtoOnly: document.getElementById('local-multi-proto').checked,
+        unmappedOnly: document.getElementById('local-unmapped-only').checked,
+      };
+    }
+
+    function buildNewsQuery(page = pageState.page) {
+      const filters = {
+        ...window.DashboardShared.readFiltersFromDom(),
+        page,
+        limit: pageState.limit,
+        llmOnly: getLocalFilters().llmOnly,
+        multiProtoOnly: getLocalFilters().multiProtoOnly,
+        unmappedOnly: getLocalFilters().unmappedOnly,
+      };
+      return filters;
+    }
+
+    function navigateToCanonical(eventId) {
+      const params = new URLSearchParams({ ...window.DashboardShared.readFiltersFromDom(), eventId });
+      window.location.href = `/canonical-events.html?${params.toString()}`;
+    }
+
+    function newsItemHtml(item) {
+      return `
+        <div class="stack-item ${pageState.selectedNewsId === item.news_id ? 'selected' : ''}" data-news-id="${item.news_id}">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_title, 88))}</div>
+            <span class="chip ${item.is_unmapped ? 'danger' : 'info'}">${window.DashboardShared.escapeHtml(window.DashboardShared.parserLabel(item))}</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(item.display_subtitle)}</div>
+          <div class="chip-row">
+            <span class="chip success">${item.proto_event_count} 个原子事件</span>
+            <span class="chip">${item.canonical_count} 个标准事件</span>
+            ${(item.canonical_preview || []).slice(0, 1).map(title => `<span class="chip">${window.DashboardShared.escapeHtml(title)}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderNewsList(items, pagination) {
+      const list = document.getElementById('news-list');
+      if (!items.length) {
+        list.innerHTML = '<div class="empty-note">当前筛选条件下暂无新闻解析结果。</div>';
+      } else {
+        list.innerHTML = items.map(newsItemHtml).join('');
+        list.querySelectorAll('[data-news-id]').forEach(element => {
+          element.addEventListener('click', () => selectNews(Number(element.dataset.newsId)));
+        });
+      }
+
+      document.getElementById('news-list-meta').textContent = `共 ${pagination.total} 篇已解析新闻`;
+      document.getElementById('news-page-stats').textContent = `${pagination.total} 篇新闻 / 第 ${pagination.page} 页`;
+      document.getElementById('news-pagination').innerHTML = `
+        <span class="page-info">每页 ${pagination.limit} 条</span>
+        <div style="display:flex; gap:0.5rem;">
+          <button ${pagination.page <= 1 ? 'disabled' : ''} onclick="changePage(${pagination.page - 1})">上一页</button>
+          <button ${(pagination.page * pagination.limit) >= pagination.total ? 'disabled' : ''} onclick="changePage(${pagination.page + 1})">下一页</button>
+        </div>
+      `;
+    }
+
+    function renderArticle(lineage) {
+      const article = lineage.article || {};
+      document.getElementById('article-title').textContent = article.title || '未命名新闻';
+      document.getElementById('article-meta').textContent = [
+        article.source || '未知来源',
+        article.lang || '',
+        window.DashboardShared.formatDate(article.published_at),
+      ].filter(Boolean).join(' · ');
+
+      document.getElementById('article-chips').innerHTML = `
+        <span class="chip info">${window.DashboardShared.escapeHtml(window.DashboardShared.parserLabel({
+          is_llm_parsed: (lineage.proto_events || []).some(item => item.llm_parse_id),
+        }))}</span>
+        <span class="chip success">${(lineage.proto_events || []).length} 个原子事件</span>
+        <span class="chip">${(lineage.canonical_events || []).length} 个标准事件</span>
+      `;
+
+      const contentText = article.content || article.title || '无内容';
+      const articleHtml = `${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(contentText, 1200))}${
+        article.source_url ? `<div style="margin-top:0.8rem;"><a href="${article.source_url}" target="_blank" style="color:#8ee8ff;">阅读原文 -></a></div>` : ''
+      }`;
+      document.getElementById('article-content').innerHTML = articleHtml;
+    }
+
+    function renderLineage(lineage) {
+      const canonicalEvents = lineage.canonical_events || [];
+      const stories = lineage.story_summaries || [];
+      const totalHypotheses = lineage.lineage_summary?.hypothesis_count || 0;
+
+      const cards = [];
+      cards.push(`
+        <div class="lineage-card">
+          <h4>L1 -> L2</h4>
+          <div class="summary-text">这篇新闻当前解析出 ${(lineage.proto_events || []).length} 个原子事件。</div>
+        </div>
+      `);
+
+      cards.push(`
+        <div class="lineage-card">
+          <h4>L3 标准事件</h4>
+          <div class="summary-text">${canonicalEvents.length ? canonicalEvents.map(item => window.DashboardShared.escapeHtml(item.display_title)).join(' / ') : '尚未归并到标准事件'}</div>
+        </div>
+      `);
+
+      cards.push(`
+        <div class="lineage-card">
+          <h4>L5-L6 叙事与假设</h4>
+          <div class="summary-text">${stories.length ? window.DashboardShared.escapeHtml(stories[0].display_title || stories[0].story_name || '已进入叙事层') : '尚未进入叙事层'}；共 ${totalHypotheses} 条假设。</div>
+        </div>
+      `);
+
+      document.getElementById('lineage-grid').innerHTML = cards.join('');
+    }
+
+    function renderProtoEvents(lineage) {
+      const protoEvents = lineage.proto_events || [];
+      const canonicalMap = new Map((lineage.canonical_events || []).map(item => [item.id, item]));
+      document.getElementById('proto-title').textContent = `原子事件解析结果 (${protoEvents.length})`;
+
+      if (!protoEvents.length) {
+        document.getElementById('proto-events-grid').innerHTML = '<div class="empty-note">该新闻暂无原子事件。</div>';
+        return;
+      }
+
+      document.getElementById('proto-events-grid').innerHTML = protoEvents.map(item => {
+        const mainline = [item.actor_name || item.actor_raw || '未知主体', item.action_raw || '发生', item.object_name || item.object_raw || ''].filter(Boolean).join(' -> ');
+        const canonical = canonicalMap.get(item.canonical_event_id);
+        return `
+          <div class="proto-row">
+            <div class="proto-mainline">${window.DashboardShared.escapeHtml(mainline)}</div>
+            <div class="proto-subline">
+              ${window.DashboardShared.escapeHtml([
+                item.location_name ? `地点: ${item.location_name}` : null,
+                item.event_time ? `时间: ${window.DashboardShared.formatDate(item.event_time)}` : null,
+                item.llm_parse_id ? 'LLM 解析' : null,
+              ].filter(Boolean).join(' · ') || '无附加信息')}
+            </div>
+            ${canonical ? `<div class="chip-row" style="margin-top:0.45rem;"><button onclick="navigateToCanonical(${canonical.id})">${window.DashboardShared.escapeHtml(canonical.display_title)}</button></div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function selectNews(newsId) {
+      pageState.selectedNewsId = newsId;
+      renderNewsList(pageState.items, { page: pageState.page, limit: pageState.limit, total: pageState.total });
+      const response = await api.getNewsLineage(newsId);
+      const lineage = response.data;
+      renderArticle(lineage);
+      renderLineage(lineage);
+      renderProtoEvents(lineage);
+    }
+
+    async function loadNews(page = 1) {
+      pageState.page = page;
+      const response = await apiClient.getDashboardNewsParse(page, pageState.limit, buildNewsQuery(page));
+      pageState.items = response.data || [];
+      pageState.total = response.pagination?.total || 0;
+      renderNewsList(pageState.items, response.pagination);
+
+      const params = new URLSearchParams(window.location.search);
+      const requestedNewsId = Number(params.get('newsId') || 0);
+      const firstNewsId = requestedNewsId || pageState.items[0]?.news_id;
+      if (firstNewsId) {
+        await selectNews(firstNewsId);
+      }
+    }
+
+    async function changePage(page) {
+      await loadNews(page);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const filters = window.DashboardShared.bindGlobalFilters(() => loadNews(1));
+      ['local-llm-only', 'local-multi-proto', 'local-unmapped-only'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => loadNews(1));
+      });
+      await loadNews(1, filters);
+    });
+  </script>
+</body>
+</html>

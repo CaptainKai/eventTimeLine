@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>情报总览 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link active" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/knowledge-graph.html" class="nav-link" data-dashboard-nav>知识图谱</a>
+      <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">L3-L6 Analysis + L1-L2 Debug</div>
+        <h2>情报总览</h2>
+        <p>先看热点标准事件、活跃叙事和待验证假设，再从异常解析样本进入新闻解析台排查。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip info" id="hero-filter-chip">全量视图</span>
+        <span class="chip" id="hero-refresh-chip">实时聚合视图</span>
+      </div>
+    </section>
+
+    <section class="global-filter-bar hero-bar">
+      <div style="width: 100%;">
+        <div class="section-head" style="margin-bottom: 0.75rem;">
+          <div>
+            <h2>全局筛选</h2>
+            <p>这组筛选会在总览、新闻解析台、标准事件台和关系与叙事台之间保持一致。</p>
+          </div>
+          <div class="chip-row">
+            <span class="chip" id="filter-stats-chip">加载中</span>
+          </div>
+        </div>
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label for="filter-start-date">开始日期</label>
+            <input type="date" id="filter-start-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-end-date">结束日期</label>
+            <input type="date" id="filter-end-date">
+          </div>
+          <div class="filter-group">
+            <label for="filter-lang">语言</label>
+            <select id="filter-lang">
+              <option value="">全部语言</option>
+              <option value="zh">中文</option>
+              <option value="en">英文</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-source">来源</label>
+            <select id="filter-source">
+              <option value="">全部来源</option>
+              <option value="gdelt">GDELT</option>
+              <option value="jin10">金十数据</option>
+              <option value="newsminimalist">NewsMinimalist</option>
+              <option value="rss">RSS</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-parser">解析器</label>
+            <select id="filter-parser">
+              <option value="">全部解析器</option>
+              <option value="llm">LLM 解析</option>
+              <option value="traditional">传统解析</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filter-event-type">事件类型</label>
+            <select id="filter-event-type">
+              <option value="">全部事件类型</option>
+              <option value="Fight">军事冲突</option>
+              <option value="Protest">抗议活动</option>
+              <option value="Assault">袭击事件</option>
+              <option value="Consult">外交磋商</option>
+              <option value="Make statement">发表声明</option>
+              <option value="Demand">提出要求</option>
+              <option value="Threaten">发出威胁</option>
+              <option value="Negotiate">进行谈判</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="apply-filters">应用筛选</button>
+            <button id="clear-filters" style="background: rgba(255,255,255,0.1);">清除</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="metric-grid" id="summary-metrics"></section>
+
+    <section class="overview-grid">
+      <div>
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>热点标准事件</h2>
+              <p>优先查看聚合证据多、关系多、假设多的 L3 事件。</p>
+            </div>
+            <button onclick="goToCanonicalPage()">进入标准事件台</button>
+          </div>
+          <div class="stack-list" id="hot-events-list"></div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>活跃叙事</h2>
+              <p>从事件链条和假设数量判断当前值得盯住的 L5 叙事。</p>
+            </div>
+            <button onclick="goToRelationshipPage('stories')">进入叙事视图</button>
+          </div>
+          <div class="stack-list" id="stories-list"></div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>待验证假设</h2>
+              <p>重点关注概率高、与当前过滤结果强相关的 L6 推演。</p>
+            </div>
+            <button onclick="goToRelationshipPage('hypotheses')">进入假设视图</button>
+          </div>
+          <div class="stack-list" id="hypotheses-list"></div>
+        </article>
+      </div>
+
+      <div>
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>解析器分布</h2>
+              <p>按新闻粒度看当前筛选范围内的解析方法占比与关系分布。</p>
+            </div>
+          </div>
+          <div class="mini-chart-row" id="parser-breakdown"></div>
+          <div class="mini-chart-row" id="relationship-breakdown" style="margin-top: 0.7rem;"></div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>最新已解析新闻</h2>
+              <p>这些新闻已经进入 L2，可直接跳去看原子事件与血统。</p>
+            </div>
+            <button onclick="goToNewsPage()">进入新闻解析台</button>
+          </div>
+          <div class="stack-list" id="recent-news-list"></div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-head">
+            <div>
+              <h2>解析关注样本</h2>
+              <p>优先排查多原子事件或暂未归并到标准事件的新闻。</p>
+            </div>
+          </div>
+          <div class="stack-list" id="watchlist-news"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script>
+    const api = window.apiClient;
+    let currentOverview = null;
+
+    function currentFilters() {
+      return window.DashboardShared.readFiltersFromDom();
+    }
+
+    function buildQuery(params = {}) {
+      const search = new URLSearchParams();
+      Object.entries({ ...currentFilters(), ...params }).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') search.set(key, value);
+      });
+      const query = search.toString();
+      return query ? `?${query}` : '';
+    }
+
+    function goToNewsPage(newsId = null) {
+      const extra = newsId ? { newsId } : {};
+      window.location.href = `/proto-events.html${buildQuery(extra)}`;
+    }
+
+    function goToCanonicalPage(eventId = null) {
+      const extra = eventId ? { eventId } : {};
+      window.location.href = `/canonical-events.html${buildQuery(extra)}`;
+    }
+
+    function goToRelationshipPage(tab = 'relationships', storyId = null) {
+      const extra = { tab };
+      if (storyId) extra.storyId = storyId;
+      window.location.href = `/event-relationships.html${buildQuery(extra)}`;
+    }
+
+    function renderMetricCards(summary) {
+      const metrics = [
+        ['新闻样本', summary.total_news],
+        ['原子事件', summary.total_proto_events],
+        ['标准事件', summary.total_canonical_events],
+        ['事件关系', summary.total_relationships],
+        ['活跃叙事', summary.active_stories],
+        ['待验证假设', summary.pending_hypotheses],
+      ];
+
+      document.getElementById('summary-metrics').innerHTML = metrics.map(([label, value]) => `
+        <div class="metric-card">
+          <div class="metric-label">${label}</div>
+          <div class="metric-value">${value ?? 0}</div>
+          <div class="metric-footnote">当前筛选范围内的可视化总览</div>
+        </div>
+      `).join('');
+    }
+
+    function renderEventList(items) {
+      if (!items.length) return '<div class="empty-note">当前筛选条件下暂无热点标准事件。</div>';
+      return items.map(item => `
+        <div class="stack-item" onclick="goToCanonicalPage(${item.id})">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(item.display_title)}</div>
+            <span class="chip info">${item.event_type || '事件'}</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_summary, 110))}</div>
+          <div class="chip-row">
+            <span class="chip">${window.DashboardShared.escapeHtml(item.display_subtitle || '无附加信息')}</span>
+            <span class="chip success">${item.relationship_count || 0} 条关系</span>
+            <span class="chip warn">${item.hypothesis_count || 0} 条假设</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderStories(items) {
+      if (!items.length) return '<div class="empty-note">当前筛选条件下暂无叙事链条。</div>';
+      return items.map(item => `
+        <div class="stack-item" onclick="goToRelationshipPage('stories', ${item.id || item.story_id})">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(item.display_title)}</div>
+            <span class="chip">${item.event_count || 0} 个事件</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_summary, 120))}</div>
+          <div class="chip-row">
+            <span class="chip info">${window.DashboardShared.escapeHtml(item.display_subtitle || '活动叙事')}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderHypotheses(items) {
+      if (!items.length) return '<div class="empty-note">当前筛选条件下暂无待验证假设。</div>';
+      return items.map(item => `
+        <div class="stack-item" onclick="goToRelationshipPage('hypotheses')">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(item.display_title)}</div>
+            <span class="status-pill ${item.status || 'pending'}">${item.status || 'pending'}</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_summary, 120))}</div>
+          <div class="chip-row">
+            <span class="chip warn">${item.probability_pct || 0}% 概率</span>
+            <span class="chip">${window.DashboardShared.escapeHtml(item.story_title || '未归属叙事')}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderNews(items) {
+      if (!items.length) return '<div class="empty-note">当前筛选条件下暂无新闻。</div>';
+      return items.map(item => `
+        <div class="stack-item" onclick="goToNewsPage(${item.news_id || item.id})">
+          <div class="item-topline">
+            <div class="item-title">${window.DashboardShared.escapeHtml(window.DashboardShared.truncate(item.display_title || item.title, 90))}</div>
+            <span class="chip ${item.is_unmapped ? 'danger' : 'info'}">${window.DashboardShared.escapeHtml(window.DashboardShared.parserLabel(item))}</span>
+          </div>
+          <div class="item-subtext">${window.DashboardShared.escapeHtml(item.display_subtitle || '')}</div>
+          <div class="chip-row">
+            ${(item.canonical_preview || []).slice(0, 2).map(title => `<span class="chip">${window.DashboardShared.escapeHtml(title)}</span>`).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderBreakdown(targetId, items, type = 'default') {
+      document.getElementById(targetId).innerHTML = items.length
+        ? items.map(item => `
+          <div class="mini-chart-item">
+            <div class="metric-label">${window.DashboardShared.escapeHtml(item.label)}</div>
+            <div class="metric-value" style="font-size: 1.3rem;">${item.count}</div>
+            <div class="metric-footnote">${type === 'parser' ? '按新闻计数' : '按关系类型计数'}</div>
+          </div>
+        `).join('')
+        : '<div class="empty-note">暂无可展示统计。</div>';
+    }
+
+    async function loadOverview(filters) {
+      const chip = document.getElementById('filter-stats-chip');
+      chip.textContent = '加载中...';
+      document.getElementById('hero-filter-chip').textContent = Object.values(filters).some(Boolean) ? '筛选视图' : '全量视图';
+
+      const response = await api.getDashboardOverview(filters);
+      currentOverview = response.data;
+      const summary = currentOverview.summary;
+
+      renderMetricCards(summary);
+      renderBreakdown('parser-breakdown', summary.parser_breakdown || [], 'parser');
+      renderBreakdown('relationship-breakdown', summary.relationship_breakdown || [], 'relationship');
+
+      document.getElementById('hot-events-list').innerHTML = renderEventList(currentOverview.hot_events || []);
+      document.getElementById('stories-list').innerHTML = renderStories(currentOverview.active_stories || []);
+      document.getElementById('hypotheses-list').innerHTML = renderHypotheses(currentOverview.pending_hypotheses || []);
+      document.getElementById('recent-news-list').innerHTML = renderNews(currentOverview.recent_news || []);
+      document.getElementById('watchlist-news').innerHTML = renderNews(currentOverview.parse_watchlist || []);
+      chip.textContent = `${summary.total_news} 篇新闻 / ${summary.total_proto_events} 个原子事件 / ${summary.total_canonical_events} 个标准事件`;
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const filters = window.DashboardShared.bindGlobalFilters(loadOverview);
+      await loadOverview(filters);
+    });
+  </script>
+</body>
+</html>
