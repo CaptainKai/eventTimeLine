@@ -534,20 +534,60 @@ router.get('/news-parse', async (req, res) => {
     res.json(payload);
   } catch (error) {
     console.error('[API] Dashboard news parse error:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard news parse view' });
   }
 });
+
+// 全局关系图谱内存缓存，缓存失效时间 5 分钟
+const GLOBAL_GRAPH_CACHE = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5分钟
+
+function clearExpiredGlobalGraphCache() {
+  const now = Date.now();
+  for (const [key, item] of GLOBAL_GRAPH_CACHE.entries()) {
+    if (now - item.cachedAt > CACHE_TTL) {
+      GLOBAL_GRAPH_CACHE.delete(key);
+    }
+  }
+}
 
 router.get('/graph/summaries/global', async (req, res) => {
   const startedAt = Date.now();
   try {
     const minMemberCount = parseInt(req.query.minMemberCount || '0', 10);
     const limit = parseInt(req.query.limit || '100', 10);
+    
+    // 自动清理过期缓存
+    clearExpiredGlobalGraphCache();
+    
+    const cacheKey = `${minMemberCount}_${limit}`;
+    const cachedItem = GLOBAL_GRAPH_CACHE.get(cacheKey);
+    const now = Date.now();
+    
+    if (cachedItem && (now - cachedItem.cachedAt < CACHE_TTL)) {
+      console.info(`[API][Dashboard][Cache Hit] /graph/summaries/global key=${cacheKey} age=${Math.floor((now - cachedItem.cachedAt) / 1000)}s`);
+      const payload = cachedItem.payload;
+      logDashboardApiPerf('/graph/summaries/global (Cache Hit)', startedAt, payload, {
+        nodes: payload.data.nodes.length,
+        links: payload.data.links.length,
+        cache: 'hit'
+      });
+      return res.json(payload);
+    }
+    
+    console.info(`[API][Dashboard][Cache Miss] /graph/summaries/global key=${cacheKey} starting cold query...`);
     const result = await getGlobalRelationshipSummaryGraph({ minMemberCount, limit });
     const payload = { data: result };
-    logDashboardApiPerf('/graph/summaries/global', startedAt, payload, {
+    
+    // 写入缓存
+    GLOBAL_GRAPH_CACHE.set(cacheKey, {
+      cachedAt: now,
+      payload: payload
+    });
+    
+    logDashboardApiPerf('/graph/summaries/global (Cache Miss)', startedAt, payload, {
       nodes: result.nodes.length,
-      links: result.links.length
+      links: result.links.length,
+      cache: 'miss'
     });
     res.json(payload);
   } catch (error) {

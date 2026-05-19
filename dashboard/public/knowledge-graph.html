@@ -231,10 +231,25 @@
 
         links.forEach(l => {
           if (graph.hasNode(String(l.source)) && graph.hasNode(String(l.target))) {
+            let edgeLabel = `${l.weight} 关联`;
+            let edgeColor = "rgba(0, 212, 255, 0.2)";
+            
+            // 提醒 2 一对多桥接展示的后续适配：区分普通物理边共享和原子节点桥接共享
+            if (l.bridge_weight > 0 && l.edge_weight > 0) {
+              edgeLabel = `${l.edge_weight}边 | ${l.bridge_weight}桥接`;
+              edgeColor = "rgba(46, 213, 115, 0.5)"; // 桥接与物理边混合 (翠绿色)
+            } else if (l.bridge_weight > 0) {
+              edgeLabel = `${l.bridge_weight} 桥接`;
+              edgeColor = "rgba(123, 237, 159, 0.4)"; // 纯原子节点桥接 (浅荧光绿)
+            } else if (l.edge_weight > 0) {
+              edgeLabel = `${l.edge_weight} 物理关联`;
+              edgeColor = "rgba(0, 212, 255, 0.3)"; // 纯物理边 (亮蓝色)
+            }
+
             graph.addEdge(String(l.source), String(l.target), {
               size: Math.log(l.weight + 1) * 2,
-              color: "rgba(0, 212, 255, 0.2)",
-              label: `${l.weight} 关联`
+              color: edgeColor,
+              label: edgeLabel
             });
           }
         });
@@ -272,6 +287,20 @@
         if (attr.nodeType === 'summary') globalNodes.push(attr.data);
       });
       updateNodeList(globalNodes, false);
+    }
+
+    // 提醒 1 辅助函数：根据边类型渲染极其高端的 D3/Sigma 颜色配置
+    function getEdgeColor(type) {
+      const colors = {
+        'parent_child': 'rgba(112, 161, 255, 0.8)', // 经典亮蓝
+        'cause_effect': 'rgba(255, 107, 129, 0.9)', // 玫瑰艳红 (强因果)
+        'evolution': 'rgba(255, 165, 2, 0.8)',    // 亮丽暖橘 (逻辑演变)
+        'related': 'rgba(123, 237, 159, 0.5)',      // 柔和嫩绿 (松散关联)
+        'trigger': 'rgba(255, 159, 67, 0.9)',      // 闪耀鲜橙 (强触发)
+        'temporal': 'rgba(165, 94, 234, 0.75)',     // 梦幻紫罗兰 (时序推导)
+        'sub_event': 'rgba(46, 213, 115, 0.8)'      // 薄荷亮绿
+      };
+      return colors[type] || 'rgba(255, 255, 255, 0.4)';
     }
 
     async function expandSummary(summaryId) {
@@ -322,9 +351,9 @@
             const t = `proto-${l.target}`;
             if (graph.hasNode(s) && graph.hasNode(t) && !graph.hasEdge(s, t) && !graph.hasEdge(t, s)) {
               graph.addEdge(s, t, {
-                label: l.type || '关联',
-                size: Math.min(Math.log(l.weight + 1) + 1, 4),
-                color: "rgba(255, 165, 2, 0.6)",
+                label: l.type === 'temporal' ? '时序' : (l.type || '关联'),
+                size: l.type === 'temporal' ? 1 : Math.min(Math.log(l.weight + 1) + 1, 4),
+                color: getEdgeColor(l.type),
                 data: l
               });
             }

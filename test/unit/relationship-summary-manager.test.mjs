@@ -22,27 +22,27 @@ function proto(overrides = {}) {
 }
 
 describe('RelationshipSummaryManager summary-first helpers', () => {
-  it('generates stable relationship summary keys within the same monthly bucket', () => {
+  it('generates stable relationship summary keys within the same weekly bucket', () => {
     const manager = new RelationshipSummaryManager();
     const first = proto({ id: 1, event_time: '2026-01-01T00:00:00Z', effective_time: '2026-01-01T00:00:00Z' });
-    const second = proto({ id: 2, event_time: '2026-01-20T00:00:00Z', effective_time: '2026-01-20T00:00:00Z' });
+    const second = proto({ id: 2, event_time: '2026-01-02T00:00:00Z', effective_time: '2026-01-02T00:00:00Z' });
 
     const firstKey = manager.buildAssignmentSummaryKey(first, { summaryKind: 'relationship', relationshipType: 'related' });
     const secondKey = manager.buildAssignmentSummaryKey(second, { summaryKind: 'relationship', relationshipType: 'related' });
 
     assert.strictEqual(firstKey, secondKey);
     assert.ok(firstKey.includes('kind:relationship'));
-    assert.ok(firstKey.includes('bucket:2026-01'));
+    assert.ok(firstKey.includes('bucket:2026-w01'));
   });
 
-  it('changes assignment keys across monthly buckets', () => {
+  it('changes assignment keys across weekly buckets', () => {
     const manager = new RelationshipSummaryManager();
-    const january = proto({ id: 1, event_time: '2026-01-31T00:00:00Z', effective_time: '2026-01-31T00:00:00Z' });
-    const february = proto({ id: 2, event_time: '2026-02-01T00:00:00Z', effective_time: '2026-02-01T00:00:00Z' });
+    const week1 = proto({ id: 1, event_time: '2026-01-01T00:00:00Z', effective_time: '2026-01-01T00:00:00Z' });
+    const week2 = proto({ id: 2, event_time: '2026-01-08T00:00:00Z', effective_time: '2026-01-08T00:00:00Z' });
 
     assert.notStrictEqual(
-      manager.buildAssignmentSummaryKey(january, { summaryKind: 'relationship', relationshipType: 'related' }),
-      manager.buildAssignmentSummaryKey(february, { summaryKind: 'relationship', relationshipType: 'related' })
+      manager.buildAssignmentSummaryKey(week1, { summaryKind: 'relationship', relationshipType: 'related' }),
+      manager.buildAssignmentSummaryKey(week2, { summaryKind: 'relationship', relationshipType: 'related' })
     );
   });
 
@@ -56,7 +56,7 @@ describe('RelationshipSummaryManager summary-first helpers', () => {
     assert.strictEqual(payload.summary_kind, 'isolated');
     assert.strictEqual(payload.relationship_type, 'isolated');
     assert.ok(payload.summary_key.includes('proto:42'));
-    assert.strictEqual(payload.time_bucket, '2026-01');
+    assert.strictEqual(payload.time_bucket, '2026-w01');
     assert.strictEqual(payload.metadata.rule_version, 'atomic-summary-first-v2');
   });
 

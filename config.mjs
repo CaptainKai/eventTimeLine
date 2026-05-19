@@ -82,7 +82,7 @@ export default {
   // 数据源配置 - 可在这里启用/禁用源
   sources: {
     gdelt: {
-      enabled: true,
+      enabled: false,
       priority: 1,
     },
     rssNews: {

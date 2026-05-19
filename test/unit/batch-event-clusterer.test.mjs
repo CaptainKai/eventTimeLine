@@ -24,12 +24,12 @@ function proto(overrides = {}) {
 }
 
 describe('BatchEventClusterer', () => {
-  it('builds stable cluster signatures for same entity/action/location/month', () => {
+  it('builds stable cluster signatures for same entity/action/location/week', () => {
     const first = buildProtoClusterSignature(proto({ id: 1, event_time: '2026-01-01T00:00:00Z' }));
-    const second = buildProtoClusterSignature(proto({ id: 2, event_time: '2026-01-20T00:00:00Z' }));
+    const second = buildProtoClusterSignature(proto({ id: 2, event_time: '2026-01-02T00:00:00Z' }));
 
     assert.strictEqual(first.cluster_key, second.cluster_key);
-    assert.strictEqual(first.time_bucket, '2026-01');
+    assert.strictEqual(first.time_bucket, '2026-w01');
   });
 
   it('clusters near duplicate proto events in the same batch', () => {
@@ -45,11 +45,11 @@ describe('BatchEventClusterer', () => {
     assert.deepStrictEqual(clusters[1].proto_event_ids, [3]);
   });
 
-  it('does not cluster across monthly buckets', () => {
+  it('does not cluster across weekly buckets', () => {
     const clusterer = new BatchEventClusterer();
     const clusters = clusterer.clusterProtoEvents([
-      proto({ id: 1, event_time: '2026-01-31T00:00:00Z' }),
-      proto({ id: 2, event_time: '2026-02-01T00:00:00Z' })
+      proto({ id: 1, event_time: '2026-01-01T00:00:00Z' }),
+      proto({ id: 2, event_time: '2026-01-15T00:00:00Z' })
     ]);
 
     assert.strictEqual(clusters.length, 2);

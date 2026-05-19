@@ -5,7 +5,7 @@
 class ApiClient {
   constructor(baseUrl = '/api/v1') {
     this.baseUrl = baseUrl;
-    this.timeout = 10000; // 10秒超时
+    this.timeout = 30000; // 30秒超时
   }
 
   /**

@@ -22,13 +22,13 @@ function proto(overrides = {}) {
 }
 
 describe('AtomicRelationshipAnalyzer', () => {
-  it('detects temporal relationships between related proto events', () => {
+  it('skips temporal relationships to reduce physical storage noise', () => {
     const relationships = analyzer.analyzeProtoRelationship(
       proto({ id: 1, event_time: '2026-01-01T00:00:00Z' }),
       proto({ id: 2, event_time: '2026-01-02T00:00:00Z' })
     );
 
-    assert.ok(relationships.some(item => item.relationship_type === 'temporal'));
+    assert.ok(!relationships.some(item => item.relationship_type === 'temporal'));
   });
 
   it('detects cause/effect relationships from known action patterns', () => {
@@ -70,6 +70,6 @@ describe('AtomicRelationshipAnalyzer', () => {
     );
 
     assert.ok(relationships.length > 0);
-    assert.ok(relationships.some(item => ['related', 'temporal'].includes(item.relationship_type)));
+    assert.ok(relationships.some(item => item.relationship_type === 'related'));
   });
 });

@@ -246,6 +246,11 @@ async function drainSummaryJobs(options = {}) {
       }
     }
     console.log(`[AtomicGraph] Drained summary jobs type=${options.jobType || 'all'} batch=${jobs.length} completed=${stats.completed_detail_job_count} failed=${stats.failed_detail_job_count}`);
+    
+    // 内存治理：主动触发垃圾回收，彻底杜绝大批量高内存配对任务堆积导致的 OOM 溢出
+    if (typeof global !== 'undefined' && global.gc) {
+      global.gc();
+    }
   }
 
   return stats;
