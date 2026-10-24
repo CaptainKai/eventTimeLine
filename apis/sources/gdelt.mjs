@@ -9,6 +9,7 @@ import { parseGDELTRaw } from '../parsers/gdelt-parser.mjs';
 import { getOrCreateEntity } from '../../lib/db/entity-queries.mjs';
 import { query } from '../../lib/db/connection.mjs';
 import { upsertNews } from '../../lib/db/news-queries.mjs';
+import config from '../../config.mjs';
 
 // === CSV Export: Primary data source ===
 
@@ -64,6 +65,11 @@ export function generateMockGDELTEvents(count = 10) {
 // GDELT provides structured actor/action/location — skip NLP parser, directly build events
 
 export async function processGDELTEvents(limit = 50) {
+  if (config.sources?.gdelt?.enabled === false) {
+    console.log('[GDELT] Source disabled by config.sources.gdelt.enabled=false; skipping CSV export fetch.');
+    return { status: 'disabled', success: 0, failed: 0, skipped: 0 };
+  }
+
   console.log('[GDELT] Fetching real-time events from GDELT CSV export...');
 
   const gdeltNewsId = await ensureGDELTSystemNewsId();

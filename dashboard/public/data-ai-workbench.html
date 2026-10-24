@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据与 AI 工作台 | 事件时间线引擎</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="data-ai-workbench.css">
+</head>
+<body>
+  <nav class="nav-bar">
+    <h1>事件时间线引擎</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link" data-dashboard-nav>情报总览</a>
+      <a href="/proto-events.html" class="nav-link" data-dashboard-nav>新闻解析台</a>
+      <a href="/canonical-events.html" class="nav-link" data-dashboard-nav>标准事件台</a>
+      <a href="/event-relationships.html" class="nav-link" data-dashboard-nav>关系与叙事台</a>
+      <a href="/knowledge-graph.html" class="nav-link" data-dashboard-nav>知识图谱</a>
+      <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
+      <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+      <a href="/data-ai-workbench.html" class="nav-link active" data-dashboard-nav>数据与 AI 工作台</a>
+    </div>
+  </nav>
+
+  <main class="dashboard-container">
+    <section class="hero-bar">
+      <div class="hero-copy">
+        <div class="eyebrow">A05-A09 Serving & Agent</div>
+        <h2>数据与 AI 工作台</h2>
+        <p>统一承载语义检索、实时洞察、数据血缘和 Agent Tool 调试，并保留完整证据链。</p>
+      </div>
+      <div class="chip-row">
+        <span class="chip" id="workbench-api-status">接口检查中</span>
+        <span class="chip info" id="workbench-version">版本未知</span>
+      </div>
+    </section>
+
+    <section class="workbench-tabs" role="tablist" aria-label="数据与 AI 功能">
+      <button type="button" class="workbench-tab active" data-tab="search" role="tab">智能检索</button>
+      <button type="button" class="workbench-tab" data-tab="insights" role="tab">实时洞察</button>
+      <button type="button" class="workbench-tab" data-tab="lineage" role="tab">血缘与图谱</button>
+      <button type="button" class="workbench-tab" data-tab="agent" role="tab">Agent 调试台</button>
+    </section>
+
+    <section class="workbench-shell">
+      <div class="workbench-main">
+        <article class="section-card workbench-pane active" data-pane="search" role="tabpanel">
+          <h2>智能检索</h2>
+          <form id="semantic-search-form" class="workbench-form">
+            <label class="wide-field">查询内容<input id="search-query" name="q" type="search" placeholder="输入事件、实体或自然语言问题" required></label>
+            <label>检索方式<select id="search-mode" name="mode"><option value="keyword">关键词</option><option value="semantic">语义检索</option></select></label>
+            <label>来源<input id="search-source" name="source" placeholder="如 jin10"></label>
+            <label>开始时间<input id="search-start-date" name="startDate" type="date"></label>
+            <label>结束时间<input id="search-end-date" name="endDate" type="date"></label>
+            <label>数量<input id="search-limit" name="limit" type="number" min="1" max="50" value="20"></label>
+            <button type="submit" class="primary-btn">开始检索</button>
+          </form>
+          <div id="semantic-search-status" class="component-status">输入条件后开始检索。</div>
+          <div id="semantic-search-results" class="workbench-results"></div>
+        </article>
+        <article class="section-card workbench-pane" data-pane="insights" role="tabpanel" hidden>
+          <h2>实时洞察</h2>
+          <div class="toolbar-inline"><label>主题数量 <input id="topic-limit" type="number" min="1" max="50" value="12"></label><button id="refresh-topics" type="button">刷新主题</button></div>
+          <div id="topic-status" class="component-status">正在加载主题...</div>
+          <div id="topic-trends" class="topic-grid"></div>
+        </article>
+        <article class="section-card workbench-pane" data-pane="lineage" role="tabpanel" hidden>
+          <h2>血缘与图谱</h2>
+          <div class="dual-query-bar">
+            <form id="lineage-form"><label>新闻 ID <input id="lineage-news-id" type="number" min="1" required></label><button type="submit">查询血缘</button></form>
+            <form id="graph-form"><label>主题 Summary ID <input id="graph-summary-id" type="number" min="1" required></label><button type="submit">查询图谱</button></form>
+          </div>
+          <div id="lineage-status" class="component-status">从检索结果选择新闻，或输入新闻 ID。</div>
+          <div id="lineage-result" class="lineage-result"></div>
+          <div id="graph-result" class="graph-result"></div>
+        </article>
+        <article class="section-card workbench-pane" data-pane="agent" role="tabpanel" hidden>
+          <h2>Agent 调试台</h2>
+          <p id="agent-tool-summary">正在读取 Tool Definition...</p>
+          <form id="agent-tool-form" class="workbench-form">
+            <label>Tool<select id="agent-tool-name"></select></label>
+            <div id="agent-tool-fields" class="dynamic-fields"></div>
+            <button type="submit" class="primary-btn">执行 Tool</button>
+          </form>
+          <div id="agent-tool-status" class="component-status"></div>
+          <div id="agent-tool-result" class="agent-result"></div>
+        </article>
+      </div>
+
+      <aside class="section-card evidence-panel" id="workbench-evidence" aria-live="polite">
+        <div class="loading-state">正在加载证据元数据...</div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="scripts/utils/api.js"></script>
+  <script src="scripts/utils/dashboard-shared.js"></script>
+  <script type="module" src="scripts/data-ai-workbench.js"></script>
+</body>
+</html>

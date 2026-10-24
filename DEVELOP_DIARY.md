@@ -1,5 +1,149 @@
 # 事件时间线引擎 - 开发日记 (Develop Diary)
 
+## 2026-10-02 - 梳理与沉淀项目简历材料指南 (cv.md)
+
+### 背景与目标
+针对项目关键简历材料 `cv.md` 丢失的问题，对系统全生命周期演进历程进行全面复盘与提炼。参考 `provider-manager` 的工业级简历材料标准，从业务价值、技术栈清单、核心架构设计、核心技术难点攻坚、量化成果到面试高频追问进行系统化重构，为后续技术面试与架构汇报提供坚实支撑。
+
+### 核心提炼内容与亮点
+1. **架构全景梳理**：系统化提炼了从多源异构新闻增量摄入、中英双轨自适应 NER 与三阶段 LLM 实体动作归一化抽取，到 Summary-First 两级原子图谱解耦、双 Worker 异步队列构边，再到 WebGL 60fps 点阵世界沙盘的全链路数据流图。
+2. **四大深度技术攻坚提炼**：
+   - 超大规模图谱“超级节点 (Super-node) 滚雪球”治理与 8900 万次构边爆炸化解（周度分桶 + 废除物理 Merge 引入多对多桥接 + 免存时序边动态推导 + 代表节点采样）；
+   - 百万级图谱边自连接笛卡尔积慢查询治理（消除 110MB 磁盘外排序，SQL 耗时从 12s 降至 3s，配合 5 分钟 TTL 路由内存缓存提速至 2ms）；
+   - 三阶段 LLM 实体层级树与动作标准化归一化流水线 + 中英双轨自适应 NER；
+   - 纯前端 WebGL 点阵世界沙盘对齐与宏微观（L2 -> L1）自适应时序演进下钻。
+3. **输出落地**：生成完整规范的 `cv.md`，提供面向后端架构/图计算、知识图谱/NLP/LLM Ops、以及全栈/高性能可视化三大方向的简历描述模板与深度 Q&A 面试策略。
+
+---
+
+## 2026-05-19 - 修复地缘沙盘自适应定位、相机缩放崩溃与世界地图高保真重构
+
+### 背景与目标
+在用户对前端地缘沙盘进行交互与筛选时，发现三个严重影响体验的问题：
+1. **黑屏崩溃与定位飞出**：由于 `fitGraphToView` 试图手动将 Graph 的大尺度绝对坐标（例如 385，-148.5）直接传给相机的 `animate` 属性，而 Sigma.js 相机的 x/y 实际上基于 `[-0.5, 0.5]` 的 WebGL 归一化空间工作。这导致相机焦点瞬间被投射到了几万像素外的偏远区域，使 WebGL 图层和 Canvas 世界地图背景图层彻底飞出屏幕，呈现一片漆黑。
+2. **微观原子聚焦失效**：在进入微观下钻模式（L1 Detail）后，由于 `fitGraphToView` 仅对 `'summary'` 节点进行过滤，而微观下的节点类型为 `'atomic'`，导致 activeNodes 数组为空，定位居中直接被跳过，失去聚焦与自适应能力。
+3. **世界地图抽象不真实与 Y 轴向下偏移**：原版的大陆顶点数据 `CONTINENTS` 仅有少数折点且极为粗糙，且绝大部分活跃的地缘节点（CN, US, EU, IL, IR）集中在北半球（纬度为正，导致其 `y` 坐标在 Graph 空间中为负值），这使得全量重置后图谱和地图严重向下倾斜位移，拥挤在容器的最底沿，导致底层陆地及标签截断。同时，在“平面网络”中发生脏交互（拖拽、滚轮缩放等）后，由于未擦除相机缓存状态，切换视图极易出现脏数据残留崩溃。
+
+### 改造细节与关键代码
+
+1. **Camera 自适应居中与多模式适配**
+   - 在 `dashboard/public/knowledge-graph.html` 的 `fitGraphToView` 中，重构节点获取逻辑以同时兼容宏观 `summary` 级与微观 `atomic` 级节点；
+   - 抛弃容易算飞的手动坐标映射，引入 Sigma.js 官方推荐的 `renderer.getCamera().animatedReset()`，让相机基于当前活跃可视节点的最新归一化包围盒进行高物理精度的自动居中与全画幅贴合。
+   - 在修改的关键地方加入对活跃节点数和图阶数的 log 打印：
+     ```javascript
+     console.log('[fitGraphToView][LOG] Camera autoconfig triggered. activeNodesLength =', activeNodes.length, 'graphOrder =', graph.order);
+     ```
+
+2. **跨视图相机状态复位**
+   - 彻底擦除跨视图状态污染：在 `switchViewMode` 刚进入时，如果检测到 `renderer` 实例存在，立即强制执行 `renderer.getCamera().animatedReset()`，把平面网络中残留的拖拽及缩放脏状态 100% 清理重置，保证进入地缘沙盘时拥有极其干净无瑕的默认视口。
+
+3. **北半球地缘垂直居中微调（Y-Offset 偏置）**
+   - 针对北半球节点密集的特点，在 `fitGraphToView` 的 `geo` 模式下，执行 `animatedReset` 后引入一个 `320ms` 延迟的微型后置动画。获取当前相机的 `y` 轴视口位置，向上（y 轴负方向）偏移 `45.0`，使整个欧亚大陆、北美洲及数据点能够完美、端正地坐落在黑框正中央：
+     ```javascript
+     if (currentViewMode === 'geo') {
+       setTimeout(() => {
+         if (renderer && currentViewMode === 'geo') {
+           const camera = renderer.getCamera();
+           const beforeState = camera.getState();
+           camera.animate({ y: beforeState.y - 45.0 }, { duration: 180 });
+           console.log('[fitGraphToView][LOG] Geo mode Y-offset shift applied. BeforeY =', beforeState.y);
+         }
+       }, 320);
+     }
+     ```
+
+4. **高保真赛博朋克世界大陆重构**
+   - 重新手写了 `CONTINENTS` 数组，将大片低模多边形升级为拥有高精密折线的大陆与主要离岛（包含细致的西欧及北冰洋沿岸、非洲大陆轮廓、红海、阿拉伯半岛、印度及中南半岛、中国海岸线、北美阿拉斯加与哈德逊湾、拉布拉多半岛、南美轮廓、格陵兰岛、不列颠群岛、日本列岛及马达加斯加岛），在保持轻量体积的同时，渲染效果真实且极其高级！
+
+### 验证与效果验证
+- **崩溃黑屏彻底消除**：不论在平面网络下如何放大、缩小或拖拽平移，切换至地缘沙盘的瞬间全部能零延迟还原出精致的地图及节点，无任何控制台 JavaScript 崩溃报错。
+- **北半球完美居中**：垂直偏置生效后，中国海岸线、中东、欧洲及美国版图完全移至黑框容器正中央，没有任何标签文字和底座在底部被截断，体验极其 Premium，科技感直接拉满！
+
+## 2026-05-19 - 测试入口、GDELT 源禁用保护与知识图谱来源筛选同步
+
+### 背景与目标
+近期系统默认数据源和知识图谱查询方式已经发生变化：GDELT 从默认实时抓取源调整为可配置禁用的结构化备用源，知识图谱新增了按新闻来源过滤的宏观图谱视角；同时 Windows + Node 22 环境下默认 `npm.cmd test` 仍在执行旧 root 验证脚本和数据库集成脚本，和当前稳定测试范围不再一致。因此本次同步更新测试入口、旧测试断言和开发日志，确保日常验证路径与当前系统真实运行方式一致。
+
+### 改造细节与关键代码
+
+1. **默认测试脚本收敛到稳定测试集合**
+   - 将 `package.json` 中的 `test` 从全量 `test/**/*.test.mjs` 调整为稳定的单元测试与数据源测试：
+     ```bash
+     node --test --experimental-test-isolation=none "test/unit/*.test.mjs" "test/sources/*.test.mjs"
+     ```
+   - 新增 `test:unit`、`test:sources`、`test:integration` 三个拆分脚本，使日常快速回归和数据库/外部依赖集成验证分离。
+   - 使用 `--experimental-test-isolation=none` 避免当前 Windows/Node 22 测试运行器在隔离子进程模式下偶发 `spawn EPERM`，提高本机 `npm.cmd test` 的可用性。
+
+2. **同步旧测试到当前 Parser 与 GDELT 接口**
+   - `test/unit/parser.test.mjs` 同步当前 `mapCameoCode()` 行为：完整 CAMEO 子码仍会去掉 `, not specified below` 展示后缀，保持 UI/摘要层文本更简洁。
+   - `test/unit/traditional-parser.test.mjs` 从旧的 `extractEventTraditionally` 单事件扁平输出改为验证 `extractProtoEventsTraditionally()` 的 `proto_events[0].metadata`，覆盖 `event_code`、`trigger_keywords`、`temporal_status`、`causal_suggestion` 与证据片段。
+   - `test/integration/data-flow.test.mjs` 不再把 `fetchGDELTEvents()` 当作 mock 生成器使用，而是显式验证 `generateMockGDELTEvents()` 和 `getLatestGDELTExportInfo()`，避免在 GDELT 禁用状态下误触真实 CSV 拉取逻辑。
+
+3. **GDELT 数据源禁用保护与调度一致性**
+   - `apis/sources/gdelt.mjs` 引入 `config`，当 `config.sources.gdelt.enabled === false` 时，`processGDELTEvents()` 会直接返回 `{ status: 'disabled', success: 0, failed: 0, skipped: 0 }`，不再访问 GDELT CSV export。
+   - `apis/orchestrator.mjs` 的 `runSource(name, options)` 增加禁用源保护，非 `force` 情况下统一跳过 disabled source，避免手动调度绕开配置开关。
+
+4. **知识图谱宏观视角新增来源筛选**
+   - `api/v1/dashboard.mjs` 的 `/dashboard/graph/summaries/global` 接收 `source` 查询参数，并把来源纳入全局图缓存 key，避免“全部来源”和单来源视图复用同一缓存。
+   - `lib/db/relationship-summary-queries.mjs` 的 `getGlobalRelationshipSummaryGraph()` 增加按 `news.source` 过滤 Summary 的 SQL 条件，同时返回 `sources`、`source_counts`、`primary_source`，供前端展示来源占比和主来源。
+   - `dashboard/public/knowledge-graph.html` 新增“情报来源”下拉筛选，支持 `GDELT`、`金十数据`、`NewsMinimalist`、`RSS新闻` 等来源；切换时重新加载宏观图谱，重置按钮会清空来源筛选，并在左侧节点卡片展示主来源与多源数量标记。
+
+### 验证与效果验证
+- `npm.cmd test` 现在只覆盖当前稳定的单元测试与 source 测试集合，旧 root 诊断脚本和数据库集成脚本改为按需单独运行。
+- GDELT 关闭时，调度器和源处理器都会以 `disabled` 状态短路退出，避免无意网络请求和误写入。
+- 知识图谱来源筛选会从 API、缓存、SQL 查询到前端展示全链路生效，便于独立查看 GDELT 或其他来源贡献的关系 Summary 网络。
+
+## 2026-05-19 - 全球地缘图谱节点下钻（L2 -> L1）与时间轴视角原子级聚焦时序交互重构
+
+### 背景与目标
+为了使用户在查看全球地缘关系图谱（L2 Summary 级）时能够深钻探索原子级情报，我们需要实现从 L2 节点向 L1 内部原子事件关系图的深度下钻交互。点击图谱节点或左侧列表的 Summary 项时，整个页面应无缝转为显示该 Summary 内部的所有原子事件和物理/时序连边。同时，下方的时间轴滑块范围与刻度标签将自适应收窄并聚焦至该 Summary 的生命周期（`time_start` ~ `time_end`）内，联动支持该局域范围内的局部时序演变回放和过滤。
+
+### 改造细节与关键代码
+
+1. **下钻状态扩展与微观下钻分流控制器**
+   - 在 `dashboard/public/knowledge-graph.html` 中引入微观状态变量：
+     ```javascript
+     let currentGraphLevel = 'global'; // 'global' | 'detail'
+     let currentSummaryId = null;      // 记录下钻的 L2 Summary ID
+     let currentSummaryData = null;    // 当前 Summary 节点的元数据
+     let detailNodes = [];             // 缓存内部原子节点
+     let detailEdges = [];             // 缓存内部原子边
+     ```
+   - 重构 `initGraph` 里的 `clickNode` / `doubleClickNode` 和 `window.focusNode` 方法，如果在全局模式下，点击任何节点直接触发 `enterDetailMode(id)`，进入微观层级；若在微观模式下，点击原子节点，在右侧 Inspector 展示该原子事实，并在图谱中聚焦锁定邻居。
+
+2. **自适应平面拓扑排版与地缘沙盘错开算法**
+   - 由于后端原子节点不包含坐标，设计并实现了两种在微观模式下极具科技感的原子散点排版算法，并在关键坐标分配处加入详细日志：
+     ```javascript
+     if (currentViewMode === 'topology') {
+       // 平面拓扑排版：时间戳作为横轴线性映射，纵轴做 5 行余弦错开分布，彻底杜绝重合
+       const tNode = new Date(node.event_time).getTime();
+       const ratio = (tNode - tMin) / tRange;
+       finalX = (ratio - 0.5) * 500;
+       finalY = ((i % 5) - 2) * 55;
+     } else {
+       // 地缘沙盘模式：读取所属地缘，围绕其国家/海域经纬度坐标核心做极坐标多圈错开扩散
+       const geoKey = getGeoKey(node.title, node.description);
+       const geo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+       const geoXY = { x: geo.lng * 3.5, y: -geo.lat * 4.5 };
+       const angle = (i / detailNodes.length) * Math.PI * 2;
+       const radius = 10 + (i % 3) * 6;
+       finalX = geoXY.x + Math.cos(angle) * radius;
+       finalY = geoXY.y + Math.sin(angle) * radius;
+     }
+     ```
+
+3. **时间轴自适应视角收缩与联动过滤**
+   - 下钻时，通过 `enterDetailMode` 读取当前 Summary 的 `time_start` 与 `time_end`，强制重设下方 `slider-timeline` 刻度的 `min`、`max` 和当前 `value` 为对应的时间戳，并将滑块的标签更新为局域刻度。
+   - 兼容重构 `updateTimeFilter(val)`，当在 `detail` 模式下时，它会基于原子事件的 `event_time` 过滤原子节点并动态刷新左侧的微观原子列表 `updateDetailNodeList()`，使用户可以通过回放控制眼睁睁看着这批原子事件依时间线逐一浮现、连线并串联，效果极佳。
+
+4. **🔙 返回全局视角按钮与一键还原**
+   - 在控制面板的操作组中新增 Neon 科技感的 `btn-back-to-global` 按钮，只在进入原子图时可见，点击触发 `exitDetailMode()` 即可清空状态并重新调用 `loadGlobalGraph()` 重新加载并居中渲染全局宏观大图。
+
+### 验证与效果验证
+- **下钻与展示**：点击图谱节点或左侧列表项，可瞬间清空图谱并显示出梦幻紫虚线（时序推导虚拟边）和霓虹蓝实线（普通物理关系边）交织的微观网络图，左侧自动变成原子列表。
+- **时间轴聚焦**：下方时间轴的起止日期自动缩窄到 Summary 的生命周期内部，拉动滑块可平滑且同步地过滤图谱中的节点及列表中的列表项。
+- **返回机制**：点击返回全局视角，按钮隐藏，宏观世界大图及其对应的大时间轴完美复原。
+
 ## 2026-05-17 - 数据库全量重新回填与前端一对多桥接、时序边动态推导视觉重构
 
 ### 背景与目标
@@ -1053,3 +1197,323 @@ Dashboard 总览页和新闻解析台在后台数据量增大后加载耗时明�
 ### 验证与效果验证
 - **SQL 与数据一致性回测**：运行自建的 `scratch/api_test.mjs` 与诊断分析，优化后的 SQL 成功耗时约 3.0 秒，正确且不重不漏地输出了 2343 条连边数据。
 - **缓存极速响应**：第一次 Cold 命中耗时约 3.1 秒，后续并发请求热命中耗时仅 **2 毫秒**，并在控制台成功打印 `[Cache Hit]` 与 `[Cache Miss]` 日志，完美释放 PG 数据库高负载慢查询冲击。
+
+---
+
+## 2026-05-19 - 知识图谱“全维度探索”多模态控制板与点阵世界沙盘重构
+
+### 背景与目标
+知识图谱直接堆叠展示 100 个大 Summary 节点和 2343 条连边时，会导致屏幕信息严重超载、线条乱如麻，根本无法直观使用。针对这一严重阻碍情报研判的痛点，我们对 `knowledge-graph.html` 进行了一场史诗级的多维交互与极客霓虹美学重构：引入**平面拓扑 🛰️ / 地缘沙盘 🗺️** 双维无缝切换；集成**边连接密度过滤滑块**剪除背景噪点；集成**底部时序演变回放轴**；设计**双击焦点邻居高亮锁定模式**；在右侧展现**前驱-核心-后果三段式前因后果时序分支树**。
+
+### 改造细节与关键代码
+
+1. **边连接密度滑块剪枝过滤**
+   - 允许用户滑动选择 `min-link-weight` 密度。内存中根据 API 缓存结果实时比对 `l.weight >= minWeight` 决定是否加入 Graphology 边，直接让 2300 多条连线**瞬间瘦身**为十余条最强因果的主干链路，信息密度大幅度改善。
+
+2. **Graphology WebGL 点阵世界沙盘对齐技术**
+   - 采用纯前端数学网格计算，通过 `isLandPoint(lng, lat)` 大陆板块判定函数，在 Graphology 中优雅注入 2000 多个极暗半透明 `map_dot` 点阵背景节点：
+     ```javascript
+     for (let lat = -58; lat < 78; lat += gridStep) {
+       for (let lng = -170; lng < 175; lng += gridStep) {
+         if (isLandPoint(lng, lat)) {
+           graph.addNode(`mapdot-${mapDotIndex++}`, {
+             x: lng * 3.5, y: -lat * 4.5, size: 1.5,
+             color: 'rgba(255, 255, 255, 0.045)',
+             nodeType: 'map_dot', label: ''
+           });
+         }
+       }
+     }
+     ```
+   - **核心优势**：完全离线 100% 秒开，世界地图与 Summary 节点自然贴合，**随照相机自动平移、缩放、旋转，100% 杜绝任何多 Canvas 图层对齐抖动与内存溢出风险**。
+
+3. **地缘智能挂载与防重叠偏移算法**
+   - 智能扫描节点 Title/Description，匹配中美俄中东欧等核心地缘，在地图视图下将节点钉在对应经纬度坐标上（如 `CN [110, 33]`, `US [-98, 39]`, `IL [35, 31]` 等），并计算偏移量防止同一地区多个节点完全覆盖重叠。
+
+4. **双击聚焦锁定 (Neighborhood Focus)**
+   - 双击节点进入锁焦状态，非直接相连节点与边透明度降至 `0.05` 虚化变暗，只高亮呈现一阶直接关联链路；在下方提供 `slider-timeline` 时序轴，基于 GPU WebGL 的 `hidden` 属性平滑控制事件的沙盘时序涌现。
+
+### 验证与效果验证
+- **渲染性能**：2000个点阵地图节点加上100个 Summary 节点，WebGL 渲染极速流畅，照相机拖拽平滑至 60fps。
+- **功能可用性**：边密度滑动调节非常灵敏，高亮虚化过渡自然，时序自动回放沙盘顺滑演变，时序前驱后果分支树信息丰富，彻底攻克了信息超载的瓶颈！
+
+---
+
+## 2026-05-19 - 知识图谱 CSS 高度塌陷彻底根治、Canvas 2D 世界地图完美投影对齐与 Inspector 滚动硬化
+
+### 背景与目标
+在多模态全维度沙盘重构后，由于左侧列表与右侧 Inspector 面板的数据异步填充触发了复杂的网页 DOM 重排（Reflow），导致了以下三大致命视觉体验缺陷：
+1. **Sigma WebGL 画布高度塌陷**：绝对定位的百分比高度在弹性 Grid 网格下崩塌为 0 像素，导致 Sigma.js v2 报错中断，图谱呈现一片全黑。
+2. **大洲地图投影错位与越界截断**：由于排版未就绪即执行照相机对齐，使圆圈网络和各大洲地图整体被甩出视口，严重偏右下，且切换时容易因 Infinity 缩放发生闪烁黑屏。
+3. **Inspector 故事链底部截断**：前因后果链由于面板未限制高度，超出的部分直接被外层布局隐藏且没有任何滚动条，导致用户根本看不见底部衍生后果详情。
+
+### 改造细节与关键代码
+
+1. **固定像素高度容器（根治高度塌陷）**
+   - 抛弃不稳定的百分比高度，为 `.sigma-container` 强制设定固定物理高度 `height: 650px`，并将 WebGL 和 Canvas 容器设为标准绝对/相对 100% 填充：
+     ```css
+     .sigma-container {
+       width: 100%;
+       height: 650px; /* 固若金汤的排版基石 */
+       position: relative;
+       overflow: hidden;
+     }
+     ```
+
+2. **非零安全垫与 100ms 异步 Reflow 对齐调度**
+   - 在 `fitGraphToView` 自动居中计算中加入 `Math.max(..., 150)` 确保 client 宽高绝不为 0。使用 `setTimeout(..., 100)` 让排版引擎彻底重绘稳定后，再执行高精准的照相机居中与 WebGL 刷新，100% 确保图谱每一次都在屏幕正中央优美呈现：
+     ```javascript
+     setTimeout(() => {
+       if (renderer) {
+         renderer.refresh();
+         fitGraphToView(250); // 完美居中并自适应包围盒大小
+       }
+     }, 100);
+     ```
+
+3. **官方 Viewport 变换矩阵完美贴合投影**
+   - 彻底废除有渲染延迟的隐藏虚拟控制节点，直接调用官方 API `renderer.graphToViewport({x, y})`。在 Canvas 上以 60fps 刷新经纬线与发光渐变大洲多边形，完美消除地图与 WebGL 节点间的对齐抖动：
+     ```javascript
+     const geoToScreen = (lng, lat) => {
+       return renderer.graphToViewport({ x: lng * 3.5, y: -lat * 4.5 });
+     };
+     ```
+
+4. **Inspector 限制高度与精致滚动条**
+   - 给 `.inspector-scroll-area` 显式设置 `max-height: 520px` 限制并允许垂直滚动，搭配暗黑科技风精细滚动条，保证了因果故事链的完美探索：
+     ```css
+     .inspector-scroll-area {
+       overflow-y: auto;
+       max-height: 520px;
+       min-height: 0;
+     }
+     ```
+
+### 验证与效果验证
+- **完美居中与完美层合**：经浏览器 Subagent 在不同分辨率实机验证，拓扑圆圈图谱极其精确地挂在屏幕正中央，没有任何偏位截断；
+- **地图美轮美奂**：切换到“地缘沙盘”视图后，赛博各大洲轮廓流光溢彩，与 Summary 节点完美对齐，随鼠标拖拽缩放平滑无漂移；
+- **故事链完整滚阅**：情报透视仪下方的“时序故事链”成功拉取并渲染出前驱-中枢-后继推演分支，且支持流畅垂直滚动，前后台数据配合完美，视觉冲击力和产品力直接跃升至工业级门槛！
+
+---
+
+## 2026-10-07 规范化完善简历【项目描述】与【项目职责】模块
+
+### 🎯 目标
+- 全面重构并升级 `cv.md` 第六部分【项目经历】模板，规范化统一为标准的【项目描述】与【项目职责】字段。
+- 增加推荐版本【通用精炼版】（适配常规简历投递与招聘平台直填），并对选项 A（后端架构/分布式图计算）、选项 B（知识图谱/AI工程化）、选项 C（全栈/WebGL可视化）三个方向完成职责与成果的精细化扩充。
+
+### 🛠 关键修改与产出
+- **[UPDATE] cv.md**:
+  - 新增推荐版本【通用精炼版】，明确界定“项目角色（核心架构师/后端负责人）”、“项目描述”（多源异构新闻抽取 + Summary-First 拓扑解耦 + 60fps WebGL 动态沙盘）与“项目职责”（STAR 法则，聚焦超级节点治理、128万边自连接慢查询 12s->3s->2ms 优化、三阶段 LLM 归一化与中英双轨 NER 准确率 92%+、断点可恢复回填引擎）。
+  - 全面升级选项 A、B、C 模板，强化具体架构角色与职责边界，突出可量化业绩指标。
+
+---
+
+## 2026-10-23 - 数据平台基础任务 B01-B07 落地
+
+### 背景与目标
+
+为后续 Redpanda、Iceberg、Spark 与 Flink 小规模开发链路建立稳定前置条件，本轮完成统一业务标识、数据契约、处理版本、质量评测、本地基础设施、运行指标和跨存储对账。改造遵循旁路优先原则，不切换现有 Node.js + PostgreSQL 权威链路。
+
+### B01：跨语言稳定标识
+
+- 新增 `lib/data/stable-identifiers.mjs` 与 `quality/stable_identifiers.py`。
+- 新闻 ID 优先使用来源原生 ID，否则基于标准化 URL；Proto ID 绑定新闻稳定 ID、Parser 版本、事件序号和 Canonical JSON；关系 ID 绑定两端 Proto、关系类型和逻辑版本。
+- 对象键递归排序，数组保留业务顺序；URL 统一 Host、默认端口、Query 顺序、Fragment 和尾部斜杠。
+- 新增共享固定向量 `contracts/fixtures/stable-id-vectors.json`，Node 与 Python 必须生成相同 SHA-256。
+
+### B02：批流统一数据契约
+
+- 在 `contracts/schemas` 定义 NewsRaw、NewsCleaned、ParserRequest、ParserResult、ProtoEvent、RelationshipCandidate 和 DeadLetter JSON Schema。
+- 所有消息统一携带 `schema_version`、`event_id`、`event_time`、`ingested_at` 和 `pipeline_run_id`。
+- 新增轻量 Schema Validator，覆盖 required、type、const、enum、pattern、date-time、数值范围和禁止未知字段；Kafka 阶段可平滑替换为 Schema Registry 标准实现。
+
+### B03：处理版本与运行标识
+
+- 新增 `sql/024_data_platform_foundation.sql`，为 `news`、`proto_events`、`relationship_summaries`、`atomic_event_relationships` 增加稳定 ID 和处理版本字段。
+- 新增 `lib/data/processing-context.mjs`，集中生成 Pipeline Run ID，并注入 Schema、Parser、Prompt、Normalization 和 Relationship Logic 版本。
+- 新闻与原子事件写入链路已接入版本字段；旧数据明确标记为 `legacy-v1`，避免 NULL 版本产生歧义。
+- Migration 通过 `npm.cmd run migrate-data-foundation` 独立执行；执行前旧应用不应加载依赖新列的写入代码。
+
+### B04：Golden Set 与质量评测
+
+- 新增 `quality/fixtures/golden-events.jsonl` 作为最小中英文样本集。
+- 新增 `quality/evaluate_events.py`，输出事件级 Precision、Recall、F1、字段准确率和逐条失败详情。
+- 当前样本只用于验证评测框架，不代表生产抽取准确率；后续应扩展到 100-500 条人工标注数据。
+
+### B05：隔离式本地基础设施
+
+- 新增 `infra/dev/compose.yaml`，提供单节点 Redpanda、Redpanda Console、MinIO 和 Iceberg REST Catalog。
+- 通过独立网络端口和命名卷与现有 PostgreSQL 隔离；MinIO 初始化容器自动建立 `warehouse` Bucket。
+- 新增 `docs/runbooks/local-data-platform.md`，记录启动、健康检查、停止和回滚命令。
+- 当前开发机未安装 Docker，因此完成了配置与 Runbook 静态检查，但未执行容器运行态健康验证；这是后续 A01/A03 前的明确前置验证项。
+
+### B06：统一运行指标
+
+- 新增 `pipeline_run_metrics` 表，统一记录输入、输出、跳过、失败、Lag、耗时、Checkpoint Age 和 DLQ 数量。
+- 新增 `lib/observability/pipeline-metrics.mjs`，提供运行指标创建、完成、JSON 结构化日志和幂等 Upsert。
+- 指标接口支持注入 Query Function，单元测试无需数据库即可验证 SQL 与参数契约。
+
+### B07：跨存储对账
+
+- 新增 `quality/reconcile.py`，支持 JSONL、CSV 和 PostgreSQL 数据源。
+- 对账内容包括数量、重复主键、左右缺失、字段差异、浮点容差、忽略字段和无序数组。
+- 对账失败返回退出码 1，可作为 Shadow Run 和 CI 门禁。
+- Iceberg 原生 Adapter 依赖 A03；当前通过 Spark 导出 JSONL/CSV 后使用同一对账核心，避免基础阶段提前引入 PyIceberg 依赖。
+
+### 测试与验证
+
+- `npm.cmd run test:data-foundation`：覆盖稳定 ID、跨语言固定向量、Schema 合法/非法输入、版本默认值、指标状态和 SQL Upsert 契约。
+- `npm.cmd run test:python`：覆盖 Python 稳定 ID、跨语言固定向量、Golden Set 指标和重复/缺失/字段差异对账。
+- Node `--check` 与 Python `py_compile` 验证新增核心文件语法。
+- Docker CLI 在当前环境不可用，容器启动验证未伪造为已完成。
+- `npm.cmd run migrate-data-foundation` 已在本地 PostgreSQL 成功执行；随后查询 `information_schema.columns`，确认 `news` 的 6 个基础字段与 `pipeline_run_metrics.run_id` 已实际创建。
+
+---
+
+## 2026-10-23 - A01-A04 事件总线、Parser Worker、Iceberg 与 Spark 批处理
+
+### 实现内容
+
+- **A01 Redpanda 事件总线**：新增 KafkaJS 客户端、统一 Topic、PostgreSQL `event_outbox`、并发安全 Claim、幂等 Producer、失败指数退避和独立 Publisher。启用事件总线后，新闻 Upsert 与 NewsRaw/ParserRequest Outbox 使用同一数据库事务提交。
+- **A02 Parser Worker**：新增独立 Consumer/Producer Worker，消费 `parser.request.v1`，复用现有 Parser Selector，输出带稳定 Proto ID、Parser/Prompt 版本和耗时的 `parser.result.v1`；异常转换为结构化 failed 结果，避免 poison message 阻塞分区。
+- **A03 Iceberg ODS/DWD**：新增 ODS/DWD Iceberg DDL、MinIO/REST Catalog 配置、Kafka Structured Streaming Sink 和 Checkpoint 参数。ODS 按摄入日、DWD 按事件日分区。
+- **A04 Spark 批处理**：新增 PostgreSQL 历史导出、新闻去重清洗、内容指纹、质量标记、Local/Spark 双模式以及确定性 Summary/Relationship 重建。关系对数设置硬上限，避免超级节点平方爆炸。
+
+### 测试策略与边界
+
+- Node 测试使用可注入 Consumer、Producer 和 Parser，不依赖 Redpanda 或外部 LLM，覆盖成功、失败、稳定 ID 与消息路由。
+- Python 测试覆盖历史新闻去重、最新记录选择、缺失内容质量标记、关系重建确定性和关系对数上限。
+- `sql/025_event_bus_outbox.sql` 已在本地 PostgreSQL 执行成功。
+- KafkaJS 已安装并锁定为 `2.2.4`。npm 审计报告现有依赖树包含 19 个漏洞；本轮未执行可能引入破坏性升级的 `npm audit fix --force`。
+- 当前机器仍无 Docker、PySpark 与 Iceberg Runtime，因此容器、Structured Streaming 和真实 Iceberg 写入只能完成代码与静态语法验证，不能宣称运行态已经通过。Local 模式承担 CI 可执行验证，真实 A03 环境验证需在安装 Docker/Spark 后按 Runbook 执行。
+
+---
+
+## 2026-10-23 - A05-A09 实时计算、语义检索、Query Service 与 Agent Tools
+
+### 主要实现
+
+- **A05**：新增 PyFlink DWD Job、Event Time、5 分钟 Watermark、Checkpoint 与 Iceberg Sink；纯 Python 核心覆盖乱序去重和迟到分流。
+- **A06**：新增来源小时质量表、主题趋势表和带 TTL 的 Summary Candidate；完整关系重建仍由 Spark 承担，避免 Flink 状态无限增长。
+- **A07**：新增统一 Embedding 文本模板、OpenAI-compatible Embedding Client、Embedding 版本表和 pgvector 可选列；扩展不可用时降级 PostgreSQL 全文检索。
+- **A08**：新增 Query Service，隔离新闻、谱系、Summary 和图查询，统一返回数据版本、生成时间、证据 ID 和 Lineage ID，并设置超时与最大行数。
+- **A09**：新增 5 个 Agent Tools、参数白名单、时间范围限制、结果上限、证据返回和审计表。明确禁止 Agent 直接提交任意 SQL、DDL 或 DML。
+
+### 验证边界
+
+- 单元测试覆盖 Flink 核心去重、水位线、候选确定性与 TTL，以及 Agent Tool 参数拒绝、成功审计、失败审计和 Embedding 模板。
+- `sql/026_realtime_serving_agent.sql` 设计为 pgvector 可选：本地没有扩展时不阻塞基础 Serving Migration。
+- 当前环境没有 PyFlink，真实 Checkpoint/Savepoint、Kafka Connector、Iceberg Connector 和 JDBC Sink 仍需在容器环境完成集成验证。
+
+
+## 2026-10-23 - 前端 F01-F05 数据与 AI 工作台基础能力
+
+### 实现内容
+
+- F01：扩展浏览器与测试版 `ApiClient`，接入 Query Service、血缘、图谱和 Agent Tool 接口，支持调用方取消、独立超时、结构化 HTTP 错误和 `x-request-id`。
+- F02：新增查询响应适配器，统一 `data_version`、`generated_at`、`source_ids`、`lineage_id`，并区分空结果、降级、陈旧、超时、取消和服务错误。
+- F03：新增 `data-ai-workbench.html`，提供智能检索、实时洞察、血缘图谱和 Agent 调试四个 Tab；Tab、查询词和新闻 ID 可通过 URL 保存。
+- F04：新增证据与版本公共组件，统一展示版本、生成时间、来源数量、血缘 ID、降级状态及原始 JSON。
+- F05：将响应转换、URL 状态、Evidence ViewModel、Tab 校验和 Request ID 设计为可独立测试的纯函数；组件 API Client 支持注入和 Mock。
+
+### 关键设计
+
+- 保留现有原生多页面前端，不引入 React/Vue 重写。
+- 工作台基础阶段只验证接口与证据元数据，高级搜索、趋势、图谱和动态 Tool 表单留给 U01-U04。
+- Query Service 不可用时只影响工作台状态卡，不影响已有 Dashboard 页面。
+
+### 测试
+
+- 新增前端基础单元测试，覆盖响应适配、错误映射、URL 状态、证据 ViewModel、请求构建与主动取消。
+- 扩展 API Client 方法存在性测试。
+- Node 全量测试通过：99/99。
+- Python 数据基础测试通过：9/9。
+- HTTP 冒烟通过：工作台页面、ES Module、Response Adapter、Agent Tool Definition 和 Topic Query 均返回 200。
+- `git diff --check` 仍报告工作区既有文件的尾随空格；本次新增文件未引入对应问题。
+
+## 2026-10-23 - 前端 U01-U06 数据与 AI 全链路工作台
+
+### 实现内容
+
+- U01：智能检索支持关键词/语义模式、来源、日期、数量、请求取消、超时、降级提示和新闻选择。
+- U02：实时洞察展示主题强度、成员/关系数、置信度、主题时间窗口、数据生成时间，并支持手动及页面可见时自动刷新。
+- U03：血缘视图展示 L1 新闻、L2 原子事件、处理版本和置信度；图谱视图使用限量 SVG 节点/边展示 Summary 内部关系。
+- U04：基于后端 Tool Definition 动态生成五个 Agent Tool 参数表单，透传 Request ID，展示执行状态、业务结果和证据元数据。
+- U05：首页新增数据与 AI 升级摘要和热点主题入口；新查询链路失败时不影响原有总览加载。
+- U06：完成主题到语义检索、新闻到血缘、Agent 结果到对应视图的跨组件事件联动，并通过 URL 保存 Tab、查询词和新闻 ID。
+
+### 关键修复
+
+- Query Service 对 URL 查询参数执行显式布尔转换，避免字符串 `semantic=false` 被误判为启用语义检索。
+- 所有动态文本经过 HTML 转义，图谱限制为最多 60 个节点和 80 条边。
+
+### 验证
+
+- 定向测试覆盖搜索参数、主题强度、图谱布局、Agent 参数类型、响应适配、URL 状态、请求取消和证据 ViewModel。
+- HTTP 实际数据冒烟通过：工作台与首页 200，关键词搜索返回 2 条，血缘返回 1 个原子事件，图谱返回 20 个节点，Agent Request ID 成功透传。
+- Node 全量测试通过：102/102；Python 数据基础测试通过：9/9。
+
+## 2026-10-23 - 面试与项目材料 V2 重构
+
+- 基于当前数据库、代码目录、迁移、HTTP 冒烟和测试结果重新生成项目说明与面试手册。
+- 明确区分已测结果、代码资产和设计目标，删除“尚无 Spark/Flink、向量检索和 Agent Tool”等过时结论。
+- 固化量化口径：28,376 篇新闻、50,263 个原子事件、973 个 Summary、625,560 条关系边；8 个 Schema、5 个 Topic、5 个 Tool、6 个接口、7 张平台表和 19 个版本字段。
+- 测试增量以可验证检查点计算：Node 89→102（+14.6%），Python 6→9（+50%）；不将测试数增长表述为性能或准确率增长。
+- 明确 C01-C03 尚未切换、向量表尚未回填、Spark/Flink 未完成集群 Runtime 验证，避免面试材料夸大。
+
+## 2026-10-23 - 权威切换缺口、稳定 ID 回填与数仓收益基准
+
+- C01：新增 Parser Result Consumer；Parser 支持 `inline/shadow/worker`，未经 Runtime 验证时禁止直接切 worker。
+- C02：新增 `postgres/iceberg-shadow/iceberg` 权威状态，未经 Runtime 验证时自动保持 Shadow。
+- C03：新增 `legacy/shadow/ads` 查询路由、ADS Repository、影子数量/重合率和 `authority_switch_audit`。
+- 新增向量批量回填工具，支持批次、断点、版本、覆盖率和 Dry Run；100 条 Dry Run 分 4 批完成，失败 0。
+- 历史新闻稳定 ID 分批回填 28,376 条，覆盖率由 0% 提升到 100%；缺少 URL/源 ID 的遗留数据使用显式 legacy 输入。
+- 9 轮数仓基准：现场聚合 P50 752.06ms、P95 800.55ms；DWS P50 1.39ms、P95 2.12ms；P50 提升 541.52 倍，延迟降低 99.82%，Top 50 一致率 100%。
+- 全量测试：Node 108/108、Python 9/9，总计 117/117。
+# 2026-10-23 系统功能与测试工程审计
+
+- 从原始事件智能、数据平台升级和 Data Agent 三个设计目标重新核对实现范围。
+- 形成 `docs/SYSTEM_IMPLEMENTATION_AUDIT.md`，给出软件工程功能矩阵、测试缺口、面试题实践路线和系统实际意义。
+- 审计评分为 72.1/100：开发版核心可演示，生产权威切换和运行证据未闭环。
+- 确认已有可复现结果：Node/Python 隔离测试 117/117 通过；稳定 ID 覆盖 28,376/28,376；DWS 查询 P50 1.3888 ms，相对原始聚合降低 99.8153%，Top50 一致率 100%。
+- 发现 `test/integration/l1-l3-flow.test.mjs` 在测试模块加载时直接执行并调用 `process.exit(0)`，会提前终止测试进程、吞掉异常并污染开发数据库。因此本次不把 `npm run test:integration` 的退出码 0 认定为集成测试通过。
+- 识别关键功能缺口：ADS 无有效数据、Spark/Flink 缺持续运行与故障恢复证据、embedding 覆盖为 0、Agent 缺 Planner/Eval/RBAC、前端缺浏览器 E2E、C01-C03 尚未切换。
+
+# 2026-10-23 启动故障修复与运行验证
+
+- 复现 `npm start` 失败：`server.mjs` 第 66 行调试接口存在残缺对象字面量，Node.js 在模块编译阶段抛出 `SyntaxError: Unexpected identifier 'cwd'`。
+- 修复 `/api/debug/env` 响应语法，并移除 API Key 明文回显，只保留“是否设置”状态。
+- 新增 `npm run check:start`，使用 `node --check server.mjs` 在启动前捕获语法错误。
+- 验证结果：启动语法检查通过；Node 单元/来源测试 108/108 通过。
+- 实际拉起服务后验证：`GET /api/health` 返回 200/status=ok，`GET /` 返回 200，`GET /api/v1/query/topics?limit=3` 返回 200；数据库、后台 worker 和 Dashboard 均成功初始化。
+- 结论：系统当前可以正常启动和提供核心查询服务；此前“集成测试假阳性”与本次“服务入口语法错误”是两个独立问题。集成测试仍需重构以消除提前退出和数据库污染。
+
+# 2026-10-23 OpenAI 兼容接口路径修复
+
+- 复核日志发现请求被发送到 `/v1/chat/completio`，该路径缺少 `ns`，服务端因此返回 404。
+- 确认旧实现将 `OPENAI_BASE_URL` 原样作为 POST endpoint；当配置为标准 Base URL `https://muyuan.do/v1` 时也不会自动追加 `/chat/completions`。
+- 新增 `resolveChatCompletionsUrl`：兼容 `/v1` Base URL、完整 `/chat/completions` endpoint，并修正常见的 `/chat/completion`、`/chat/completio` 拼写。
+- 当前 `.env` 的 `OPENAI_BASE_URL=https://muyuan.do/v1` 实际解析为 `https://muyuan.do/v1/chat/completions`。
+- 新增 3 个 endpoint 解析测试；完整 Node 测试更新为 111/111 通过。
+- 未在自动测试中调用外部付费模型接口；服务重启后由实际解析任务验证供应商鉴权、模型名和额度。
+
+# 2026-10-23 开发环境生命周期与资源回收
+
+- 识别资源残留的所有权问题：`npm start` 只启动 Node，无法停止独立运行的 PostgreSQL Windows 服务或先前通过 `docker compose up -d` 启动的容器。
+- 修复 Node 生命周期：统一跟踪并清理采集 interval、审计 interval、启动 timeout，停止 normalization rebuild、atomic batch、atomic summary 三类 worker，等待 HTTP server 关闭后再关闭 PostgreSQL 连接池。
+- 将关闭逻辑改为幂等且可调用的 lifecycle API，避免 SIGINT/SIGTERM 重复触发清理。
+- 新增 `scripts/dev-stack.mjs`、`npm run dev:stack` 和 `npm run stack:stop`。托管模式在 Node 退出或收到 Ctrl+C 后执行 Compose `down --remove-orphans`，保留命名卷。
+- 增加 Docker CLI 缺失时的明确错误；当前机器的 PowerShell PATH 中未检测到 `docker`，因此未执行真实 Compose 启停测试。
+- 实际生命周期测试使用 3129 端口启动服务并调用 shutdown：健康接口成功；后台 timer、三个 worker、HTTP server 和 DB pool 均完成关闭，输出 `LIFECYCLE_TEST_OK`。
+- 完整 Node 回归测试 111/111 通过。
+
+# 2026-10-23 真实运行配置补齐
+
+- 复核确认此前数据平台开关主要写入 `.env.example`；该文件仅是配置模板，不会代替本机被 `dotenv` 读取的 `.env`。把模板更新描述成“本机已生效”是不准确的。
+- 将数据版本、Event Bus 旁路模式、权威路径、Topic、Query/Agent 参数同步到真实 `.env`，保持 `EVENT_BUS_ENABLED=false`、`QUERY_AUTHORITY_MODE=legacy`，无需 Docker 即可运行现有主链路。
+- 在真实 `.env` 启用低资源配置：连接池上限 5，关闭自动采集、Normalization Audit、Normalization Rebuild、Atomic Summary 和 Atomic Batch Assignment 后台任务。
+- `lib/db/connection.mjs` 改为读取 `DB_POOL_MAX`；`normalization-audit.mjs` 增加 `NORMALIZATION_REBUILD_WORKER_ENABLED` 开关。
+- 将 Audit 的 `runOnStart/apply` 代码默认值改成显式 `true` 才启用，避免配置缺失时意外执行写操作。
+- 运行时验证结果：`dbPoolMax=5`、background/audit/event bus 均为 false，三个 worker 均 disabled，query authority 为 legacy；完整测试 111/111 通过。
+- `.env` 被 `.gitignore` 排除，适合保存本机密钥和运行参数；`.env.example` 只维护无密钥的部署模板。后续必须分别说明“模板已更新”和“当前环境已生效”。

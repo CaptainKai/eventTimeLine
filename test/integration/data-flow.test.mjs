@@ -119,13 +119,14 @@ describe('Data Flow Integration Test', () => {
       assert.ok(gdeltModule);
       assert.strictEqual(typeof gdeltModule.processGDELTEvents, 'function');
       assert.strictEqual(typeof gdeltModule.fetchGDELTEvents, 'function');
-      assert.strictEqual(typeof gdeltModule.fetchGDELTFileList, 'function');
+      assert.strictEqual(typeof gdeltModule.generateMockGDELTEvents, 'function');
+      assert.strictEqual(typeof gdeltModule.getLatestGDELTExportInfo, 'function');
       console.log('[DataFlow] GDELT module imported successfully');
     });
 
     it('should generate mock GDELT events', async () => {
       const gdeltModule = await import('../../apis/sources/gdelt.mjs');
-      const mockEvents = await gdeltModule.fetchGDELTEvents(10);
+      const mockEvents = gdeltModule.generateMockGDELTEvents(10);
 
       assert.ok(Array.isArray(mockEvents));
       assert.strictEqual(mockEvents.length, 10);

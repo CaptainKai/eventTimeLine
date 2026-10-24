@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import config from './config.mjs';
 import { initDB, closeDB } from './lib/db/connection.mjs';
 import orchestrator from './apis/orchestrator.mjs';
-import { runNormalizationAudit, startNormalizationRebuildWorker } from './lib/pipeline/normalization-audit.mjs';
+import { runNormalizationAudit, startNormalizationRebuildWorker, stopNormalizationRebuildWorker } from './lib/pipeline/normalization-audit.mjs';
 import { startAtomicSummaryWorker, stopAtomicSummaryWorker } from './lib/pipeline/atomic-summary-worker.mjs';
 import { startAtomicBatchAssignmentWorker, stopAtomicBatchAssignmentWorker } from './lib/pipeline/atomic-batch-assignment-worker.mjs';
 
@@ -18,9 +18,11 @@ import intelligenceRouter from './api/v1/intelligence.mjs';
 import adminRouter from './api/v1/admin.mjs';
 import dashboardRouter from './api/v1/dashboard.mjs';
 import atomicRelationshipsRouter from './api/v1/atomic-relationships.mjs';
+import dataQueryRouter from './api/v1/data-query.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const backgroundTimers = new Set();
 
 // 确保无论从哪个工作目录启动，都能加载 eventTimeLine/.env
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -42,6 +44,7 @@ app.use('/api/v1/intelligence', intelligenceRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1', atomicRelationshipsRouter);
+app.use('/api/v1', dataQueryRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {
@@ -65,7 +68,7 @@ app.get('/api/debug/env', (req, res) => {
     cwd: process.cwd(),
     __dirname: __dirname,
     env: {
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✅ 已设置 (' + process.env.OPENAI_API_KEY + ')' : '❌ 未设置',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✅ 已设置' : '❌ 未设置',
       OPENAI_BASE_URL: process.env.OPENAI_BASE_URL || '❌ 未设置',
       OPENAI_MODEL: process.env.OPENAI_MODEL || '❌ 未设置',
       DEFAULT_PARSER: process.env.DEFAULT_PARSER || '❌ 未设置',
@@ -102,7 +105,7 @@ app.use((error, req, res) => {
 });
 
 // 服务器启动
-async function startServer() {
+async function startServer(options = {}) {
   try {
     // 初始化数据库连接
     await initDB();
@@ -121,24 +124,36 @@ async function startServer() {
       startBackgroundTasks();
     });
 
-    // 优雅关闭
-    process.on('SIGTERM', async () => {
-      console.log('[SERVER] Received SIGTERM, shutting down');
-      server.close();
-      stopAtomicBatchAssignmentWorker();
-      stopAtomicSummaryWorker();
-      await closeDB();
-      process.exit(0);
-    });
+    let shuttingDown = false;
+    const shutdown = async (signal, exitCode = 0) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[SERVER] Received ${signal}, shutting down`);
 
-    process.on('SIGINT', async () => {
-      console.log('[SERVER] Received SIGINT, shutting down');
-      server.close();
+      for (const timer of backgroundTimers) {
+        clearTimeout(timer);
+        clearInterval(timer);
+      }
+      backgroundTimers.clear();
+      stopNormalizationRebuildWorker();
       stopAtomicBatchAssignmentWorker();
       stopAtomicSummaryWorker();
+
+      const forceCloseTimer = setTimeout(() => server.closeAllConnections?.(), 5000);
+      if (typeof forceCloseTimer.unref === 'function') forceCloseTimer.unref();
+      await new Promise(resolve => server.close(resolve));
+      clearTimeout(forceCloseTimer);
       await closeDB();
-      process.exit(0);
-    });
+      console.log('[SERVER] Shutdown complete');
+      if (options.exitOnShutdown !== false) process.exit(exitCode);
+      return { exitCode };
+    };
+
+    if (options.registerSignalHandlers !== false) {
+      process.once('SIGTERM', () => shutdown('SIGTERM'));
+      process.once('SIGINT', () => shutdown('SIGINT'));
+    }
+    return { server, shutdown };
   } catch (error) {
     console.error('[SERVER] Failed to start:', error);
     process.exit(1);
@@ -159,12 +174,12 @@ function startBackgroundTasks() {
   console.log(`[SERVER] Background tasks started. Polling every ${config.refreshIntervalMinutes} minutes.`);
 
   if (config.backgroundSweep.runOnStart) {
-    setTimeout(runTask, config.backgroundSweep.startupDelayMs || 30000);
+    backgroundTimers.add(setTimeout(runTask, config.backgroundSweep.startupDelayMs || 30000));
   } else {
     console.log('[SERVER] Initial background sweep skipped. Set BACKGROUND_SWEEP_RUN_ON_START=true to enable it.');
   }
 
-  setInterval(runTask, intervalMs);
+  backgroundTimers.add(setInterval(runTask, intervalMs));
   startNormalizationAuditScheduler();
 
   async function runTask() {
@@ -188,18 +203,18 @@ function startNormalizationAuditScheduler() {
     return;
   }
 
-  const runOnStart = process.env.NORMALIZATION_AUDIT_RUN_ON_START !== 'false';
-  const apply = process.env.NORMALIZATION_AUDIT_APPLY !== 'false';
+  const runOnStart = process.env.NORMALIZATION_AUDIT_RUN_ON_START === 'true';
+  const apply = process.env.NORMALIZATION_AUDIT_APPLY === 'true';
   const limit = Number(process.env.NORMALIZATION_AUDIT_LIMIT || 20);
   const intervalMs = Number(process.env.NORMALIZATION_AUDIT_INTERVAL_MS || 24 * 60 * 60 * 1000);
 
   console.log(`[NormalizationAudit] Scheduler enabled. runOnStart=${runOnStart} apply=${apply} intervalMs=${intervalMs} limit=${limit}`);
 
   if (runOnStart) {
-    setTimeout(runAuditTask, 5000);
+    backgroundTimers.add(setTimeout(runAuditTask, 5000));
   }
 
-  setInterval(runAuditTask, intervalMs);
+  backgroundTimers.add(setInterval(runAuditTask, intervalMs));
 
   async function runAuditTask() {
     const startedAt = Date.now();

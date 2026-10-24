@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/proto-event.schema.json",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id", "news_id", "actor", "action", "confidence", "parser_version", "normalization_version"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" },
+    "pipeline_run_id": { "type": "string", "minLength": 8 },
+    "news_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "actor": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "minLength": 1 },
+    "object": { "type": ["string", "null"] },
+    "location": { "type": ["string", "null"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "parser_version": { "type": "string", "minLength": 1 },
+    "normalization_version": { "type": "string", "minLength": 1 },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

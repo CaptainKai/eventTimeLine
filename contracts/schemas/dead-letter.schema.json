@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/dead-letter.schema.json",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id", "stage", "error_code", "error_message", "original_payload"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" },
+    "pipeline_run_id": { "type": "string", "minLength": 8 },
+    "stage": { "type": "string", "minLength": 1 },
+    "error_code": { "type": "string", "minLength": 1 },
+    "error_message": { "type": "string", "minLength": 1 },
+    "retryable": { "type": "boolean" },
+    "original_payload": {},
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

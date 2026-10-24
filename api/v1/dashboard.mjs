@@ -555,11 +555,12 @@ router.get('/graph/summaries/global', async (req, res) => {
   try {
     const minMemberCount = parseInt(req.query.minMemberCount || '0', 10);
     const limit = parseInt(req.query.limit || '100', 10);
+    const source = String(req.query.source || '').trim().toLowerCase();
     
     // 自动清理过期缓存
     clearExpiredGlobalGraphCache();
     
-    const cacheKey = `${minMemberCount}_${limit}`;
+    const cacheKey = `${minMemberCount}_${limit}_${source || 'all'}`;
     const cachedItem = GLOBAL_GRAPH_CACHE.get(cacheKey);
     const now = Date.now();
     
@@ -569,13 +570,14 @@ router.get('/graph/summaries/global', async (req, res) => {
       logDashboardApiPerf('/graph/summaries/global (Cache Hit)', startedAt, payload, {
         nodes: payload.data.nodes.length,
         links: payload.data.links.length,
+        source: source || 'all',
         cache: 'hit'
       });
       return res.json(payload);
     }
     
     console.info(`[API][Dashboard][Cache Miss] /graph/summaries/global key=${cacheKey} starting cold query...`);
-    const result = await getGlobalRelationshipSummaryGraph({ minMemberCount, limit });
+    const result = await getGlobalRelationshipSummaryGraph({ minMemberCount, limit, source });
     const payload = { data: result };
     
     // 写入缓存
@@ -587,6 +589,7 @@ router.get('/graph/summaries/global', async (req, res) => {
     logDashboardApiPerf('/graph/summaries/global (Cache Miss)', startedAt, payload, {
       nodes: result.nodes.length,
       links: result.links.length,
+      source: source || 'all',
       cache: 'miss'
     });
     res.json(payload);

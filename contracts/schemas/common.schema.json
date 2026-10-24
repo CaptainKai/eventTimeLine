@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/common.schema.json",
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id"],
+      "properties": {
+        "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+\\.[0-9]+$" },
+        "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "event_time": { "type": "string", "format": "date-time" },
+        "ingested_at": { "type": "string", "format": "date-time" },
+        "pipeline_run_id": { "type": "string", "minLength": 8 },
+        "metadata": { "type": "object" }
+      }
+    }
+  }
+}

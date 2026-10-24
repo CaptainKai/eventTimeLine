@@ -21,14 +21,18 @@ import { socksFetch } from '../../lib/utils/socks-fetch.mjs';
 /**
  * 通用 OpenAI 兼容请求
  */
+export function resolveChatCompletionsUrl(value) {
+  const rawValue = String(value || 'http://127.0.0.1:3100/v1').trim().replace('0.0.0.0', '127.0.0.1');
+  const normalizedValue = rawValue.replace(/\/+$/, '').replace(/\/chat\/completio(?:n)?$/i, '/chat/completions');
+
+  if (/\/chat\/completions$/i.test(normalizedValue)) return normalizedValue;
+  if (/\/v\d+$/i.test(normalizedValue)) return `${normalizedValue}/chat/completions`;
+  return `${normalizedValue}/v1/chat/completions`;
+}
+
 export async function callLLM(prompt, retries = 2) {
   const apiKey = process.env.OPENAI_API_KEY || 'sk-allproxy-default';
-  let baseUrl = process.env.OPENAI_BASE_URL || 'http://127.0.0.1:3100/v1';
-  baseUrl = baseUrl.replace('0.0.0.0', '127.0.0.1');
-  // // 确保 baseUrl 包含 /v1（OpenAI 兼容 API 的标准路径）
-  // if (!/\/v1\/?$/.test(baseUrl)) {
-  //   baseUrl = baseUrl.replace(/\/+$/, '') + '/v1';
-  // }
+  const endpoint = resolveChatCompletionsUrl(process.env.OPENAI_BASE_URL);
   const model = process.env.OPENAI_MODEL || 'deepseek/deepseek-chat';
 
   const requestBody = {
@@ -43,9 +47,9 @@ export async function callLLM(prompt, retries = 2) {
 
   for (let attempt = 1; attempt <= 1 + retries; attempt++) {
     try {
-      console.log(`[LLM-Parser] Requesting ${model} at ${baseUrl} (attempt ${attempt})`);
+      console.log(`[LLM-Parser] Requesting ${model} at ${endpoint} (attempt ${attempt})`);
 
-      const response = await socksFetch(`${baseUrl}`, {
+      const response = await socksFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

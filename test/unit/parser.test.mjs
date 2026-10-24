@@ -13,9 +13,9 @@ describe('CAMEO Code Mapping', () => {
     });
 
     it('should handle three-digit event codes', () => {
-      assert.strictEqual(mapCameoCode('010'), 'Make statement, not specified below');
-      assert.strictEqual(mapCameoCode('040'), 'Consult, not specified below');
-      assert.strictEqual(mapCameoCode('130'), 'Threaten, not specified below');
+      assert.strictEqual(mapCameoCode('010'), 'Make statement');
+      assert.strictEqual(mapCameoCode('040'), 'Consult');
+      assert.strictEqual(mapCameoCode('130'), 'Threaten');
       assert.strictEqual(mapCameoCode('181'), 'Physically assault');
       assert.strictEqual(mapCameoCode('191'), 'Engage in armed conflict');
     });

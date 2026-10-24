@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/parser-request.schema.json",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id", "news_id", "title", "parser_version", "prompt_version"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" },
+    "pipeline_run_id": { "type": "string", "minLength": 8 },
+    "news_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "content": { "type": ["string", "null"] },
+    "lang": { "type": "string" },
+    "parser_version": { "type": "string", "minLength": 1 },
+    "prompt_version": { "type": "string", "minLength": 1 },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

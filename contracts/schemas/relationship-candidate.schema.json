@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/relationship-candidate.schema.json",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id", "source_proto_id", "target_proto_id", "relationship_type", "score", "logic_version"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" },
+    "pipeline_run_id": { "type": "string", "minLength": 8 },
+    "source_proto_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "target_proto_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relationship_type": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "logic_version": { "type": "string", "minLength": 1 },
+    "evidence": { "type": "object" },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

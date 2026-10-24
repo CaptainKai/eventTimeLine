@@ -18,6 +18,7 @@
       <a href="/knowledge-graph.html" class="nav-link" data-dashboard-nav>知识图谱</a>
       <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
       <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+      <a href="/data-ai-workbench.html" class="nav-link" data-dashboard-nav>数据与 AI 工作台</a>
     </div>
   </nav>
 
@@ -104,6 +105,10 @@
 
     <section class="metric-grid" id="summary-metrics"></section>
 
+    <section class="section-card" id="data-ai-upgrade-summary" style="padding: 1rem 1.2rem;">
+      <div class="loading-state">正在加载数据与 AI 升级摘要...</div>
+    </section>
+
     <section class="overview-grid">
       <div>
         <article class="section-card">
@@ -178,6 +183,10 @@
 
   <script src="scripts/utils/api.js"></script>
   <script src="scripts/utils/dashboard-shared.js"></script>
+  <script type="module">
+    import { loadPipelineStatus } from './scripts/components/pipeline-status.mjs';
+    loadPipelineStatus(window.apiClient, document.getElementById('data-ai-upgrade-summary'));
+  </script>
   <script>
     const api = window.apiClient;
     let currentOverview = null;

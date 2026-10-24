@@ -150,6 +150,11 @@ export async function runSource(name, options = {}) {
     throw new Error(`Unknown source: ${name}`);
   }
 
+  if (!source.enabled && options.force !== true) {
+    console.log(`[Orchestrator] Source ${name} disabled by config; skipping.`);
+    return { status: 'disabled', success: 0, failed: 0, skipped: 0 };
+  }
+
   return source.processor(options.limit || 50, options);
 }
 

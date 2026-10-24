@@ -3,22 +3,209 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>知识图谱 | 事件时间线引擎</title>
+  <title>全球地缘情报图谱 | 事件时间线引擎</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="dashboard.css">
+  <!-- 引入 Outfit 现代科技字体 -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
   <!-- 引入 Graphology 和 Sigma.js v2 -->
   <script src="https://unpkg.com/graphology@0.25.4/dist/graphology.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sigma@2.4.0/build/sigma.min.js"></script>
   <style>
+    :root {
+      --bg-darker: #05080c;
+      --bg-dark: #0a0f18;
+      --border-cyber: rgba(0, 212, 255, 0.25);
+      --border-cyber-glow: rgba(0, 212, 255, 0.6);
+      --neon-cyan: #00d4ff;
+      --neon-violet: #a55eea;
+      --neon-green: #2ed573;
+      --text-glow: 0 0 10px rgba(0, 212, 255, 0.4);
+    }
+
+    body {
+      font-family: 'Outfit', 'Segoe UI', sans-serif;
+      background: var(--bg-darker);
+    }
+
+    /* 容器显式像素高度，100% 杜绝高度塌陷 */
     .sigma-container {
       width: 100%;
-      height: 100%;
-      min-height: 600px; /* 添加最小高度，防止 CSS 高度塌陷导致图谱渲染为空白 */
-      background: #0b111a;
+      height: 650px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-cyber);
       border-radius: 12px;
       overflow: hidden;
       position: relative;
+      box-shadow: inset 0 0 30px rgba(0, 212, 255, 0.05);
     }
+
+    /* 三维视角控制栏 */
+    .view-segment-control {
+      display: flex;
+      background: rgba(10, 15, 24, 0.85);
+      border: 1px solid var(--border-cyber);
+      border-radius: 30px;
+      padding: 3px;
+      gap: 5px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .view-tab {
+      background: transparent;
+      border: none;
+      color: #8c9cb3;
+      padding: 8px 18px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .view-tab:hover {
+      color: #fff;
+    }
+    .view-tab.active {
+      background: rgba(0, 212, 255, 0.2);
+      border: 1px solid rgba(0, 212, 255, 0.4);
+      color: var(--neon-cyan);
+      text-shadow: var(--text-glow);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+    }
+
+    /* 精美控制面板 */
+    .control-panel-grid {
+      background: rgba(10, 15, 24, 0.6);
+      border: 1px solid var(--border-cyber);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+    
+    .panel-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      min-width: 220px;
+    }
+    .slider-group label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #8c9cb3;
+      display: flex;
+      justify-content: space-between;
+    }
+    .slider-group label span {
+      color: var(--neon-cyan);
+      font-weight: bold;
+    }
+    .cyber-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+    .cyber-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 8px var(--neon-cyan);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .cyber-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.3);
+    }
+
+    /* 底部时间线沙盘 */
+    .temporal-playback-bar {
+      margin-top: 1.5rem;
+      background: rgba(10, 15, 24, 0.8);
+      border: 1px solid var(--border-cyber);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .timeline-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .timeline-title {
+      font-size: 0.85rem;
+      color: #fff;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .play-btn {
+      background: rgba(0, 212, 255, 0.15);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      color: var(--neon-cyan);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .play-btn:hover {
+      background: rgba(0, 212, 255, 0.35);
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+    }
+
+    /* 右上角悬浮图例 */
+    .graph-legend {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      background: rgba(5, 8, 12, 0.85);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 8px;
+      padding: 0.8rem;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #8c9cb3;
+    }
+    .legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
     .graph-controls {
       position: absolute;
       bottom: 1rem;
@@ -44,11 +231,74 @@
     .control-btn:hover {
       background: rgba(0, 212, 255, 0.4);
     }
-    .node-label-bg {
-      background: rgba(0, 0, 0, 0.6);
-      padding: 2px 6px;
-      border-radius: 4px;
-      pointer-events: none;
+
+    /* Inspector前驱后继事件连线 */
+    .relation-flow-tree {
+      margin-top: 1rem;
+      border-left: 2px dashed rgba(0, 212, 255, 0.25);
+      padding-left: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    .flow-step {
+      position: relative;
+    }
+    .flow-step::before {
+      content: '';
+      position: absolute;
+      left: calc(-1rem - 6px);
+      top: 6px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #8c9cb3;
+      border: 2px solid var(--bg-dark);
+    }
+    .flow-step.precursor::before {
+      background: var(--neon-violet);
+    }
+    .flow-step.current::before {
+      background: var(--neon-cyan);
+      box-shadow: 0 0 6px var(--neon-cyan);
+    }
+    .flow-step.successor::before {
+      background: var(--neon-green);
+    }
+    .flow-step-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8c9cb3;
+      margin-bottom: 0.1rem;
+    }
+    .flow-step-content {
+      font-size: 0.8rem;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    /* 显式滚动条高度限制，100% 杜绝 Inspector 溢出截断 */
+    .inspector-scroll-area {
+      overflow-y: auto;
+      max-height: 520px;
+      min-height: 0;
+      padding-right: 0.3rem;
+    }
+
+    /* 暗黑科技风滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-cyber);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--border-cyber-glow);
     }
   </style>
 </head>
@@ -63,71 +313,80 @@
       <a href="/knowledge-graph.html" class="nav-link active" data-dashboard-nav>知识图谱</a>
       <a href="/pending-normalizations.html" class="nav-link" data-dashboard-nav>待验证归一化</a>
       <a href="/normalization-audit-logs.html" class="nav-link" data-dashboard-nav>巡检日志</a>
+      <a href="/data-ai-workbench.html" class="nav-link" data-dashboard-nav>数据与 AI 工作台</a>
     </div>
   </nav>
 
   <main class="dashboard-container">
-    <section class="hero-bar">
+    <section class="hero-bar" style="padding-bottom: 0.8rem;">
       <div class="hero-copy">
-        <div class="eyebrow">L1-L6 Hermes Visualization</div>
-        <h2>关系层知识图谱</h2>
-        <p>参考 Hermes 方案：初始展示关系层节点（叙事集群），点击节点展开内部关系簇。</p>
+        <div class="eyebrow" style="color: var(--neon-cyan); text-shadow: var(--text-glow);">L1-L6 Hermes Multi-View Sandbox</div>
+        <h2>全球情报地缘图谱</h2>
+        <p>支持多维视角切换，自动过滤弱连接，双击锁定邻居，探索地缘关系与时序演变分支。</p>
       </div>
-      <div class="chip-row">
-        <span class="chip info" id="graph-status">初始化中...</span>
+      <div class="view-segment-control">
+        <button class="view-tab active" id="tab-topology" onclick="switchViewMode('topology')">🛰️ 平面网络</button>
+        <button class="view-tab" id="tab-geo" onclick="switchViewMode('geo')">🗺️ 地缘沙盘</button>
       </div>
     </section>
 
-    <section class="global-filter-bar hero-bar">
-      <div style="width: 100%;">
-        <div class="filter-grid">
-          <div class="filter-group">
-            <label for="filter-start-date">开始日期</label>
-            <input type="date" id="filter-start-date">
-          </div>
-          <div class="filter-group">
-            <label for="filter-end-date">结束日期</label>
-            <input type="date" id="filter-end-date">
-          </div>
-          <div class="filter-group">
-            <label for="filter-lang">语言</label>
-            <select id="filter-lang">
-              <option value="">全部语言</option>
-              <option value="zh">中文</option>
-              <option value="en">英文</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label for="filter-source">来源</label>
-            <select id="filter-source">
-              <option value="">全部来源</option>
-              <option value="gdelt">GDELT</option>
-              <option value="jin10">金十数据</option>
-              <option value="newsminimalist">NewsMinimalist</option>
-              <option value="rss">RSS</option>
-            </select>
-          </div>
-          <div class="filter-actions">
-            <button id="apply-filters">应用筛选</button>
-            <button id="reset-view" style="background: rgba(255,255,255,0.1);">重置视图</button>
-          </div>
+    <!-- 精美控制面板 -->
+    <section class="control-panel-grid">
+      <div class="panel-row">
+        <!-- 边关系过滤 -->
+        <div class="slider-group">
+          <label for="slider-link-weight">边连接密度过滤 <span id="val-link-weight">2 关联</span></label>
+          <input type="range" id="slider-link-weight" class="cyber-slider" min="1" max="50" value="2" oninput="updateLinkFilter(this.value)">
+        </div>
+        <!-- 过滤条件 -->
+        <div class="filter-group" style="min-width: 140px; margin-bottom: 0;">
+          <label for="filter-source">情报来源</label>
+          <select id="filter-source" style="margin-bottom: 0;" onchange="onFilterChange()">
+            <option value="">全部来源</option>
+            <option value="gdelt">GDELT</option>
+            <option value="jin10">金十数据</option>
+            <option value="newsminimalist">NewsMinimalist</option>
+            <option value="rss">RSS新闻</option>
+          </select>
+        </div>
+        <div class="filter-actions" style="margin-top: 0;">
+          <button id="btn-back-to-global" onclick="exitDetailMode()" style="background: rgba(0, 212, 255, 0.2); border: 1px solid var(--border-cyber); color: var(--neon-cyan); display: none; margin-right: 8px;">🔙 返回全局视角</button>
+          <button id="btn-focus-reset" onclick="resetFocusMode()" style="background: rgba(0, 212, 255, 0.1); border: 1px dashed var(--border-cyber); display: none;">🔒 解锁聚焦</button>
+          <button id="btn-reset-view" onclick="resetGlobalView()" style="background: rgba(255,255,255,0.06);">⟲ 重置图谱</button>
         </div>
       </div>
     </section>
 
     <section class="three-column-layout">
+      <!-- 节点列表 -->
       <aside class="list-card">
         <div class="section-head">
           <div>
-            <h3>节点列表</h3>
+            <h3 id="list-title">关系节点</h3>
             <p id="list-meta">加载中...</p>
           </div>
         </div>
         <div class="list-scroll-area" id="node-list"></div>
       </aside>
 
-      <section class="visual-canvas">
+      <!-- 可视化主画布 (层叠结构) -->
+      <section class="visual-canvas" style="position: relative;">
         <div class="sigma-container" id="sigma-host">
+          <!-- 绝对物理贴合的 2D Canvas 世界地图背景图层 -->
+          <canvas id="geo-map-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; display: none;"></canvas>
+          <!-- WebGL 图谱宿主图层（使用 100% 容器绝对填充） -->
+          <div id="sigma-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;"></div>
+
+          <!-- 右上角悬浮图例 -->
+          <div class="graph-legend" id="graph-legend">
+            <div class="legend-item"><div class="legend-color" style="background:#ff4757"></div><span>重度关系 (&gt;=100)</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#ffa502"></div><span>中度关系 (50-99)</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#eccc68"></div><span>中轻关系 (20-49)</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#2ed573"></div><span>轻度关系 (5-19)</span></div>
+            <div class="legend-item"><div class="legend-color" style="background:#00d4ff"></div><span>微度关系 (&lt;5)</span></div>
+          </div>
+
+          <!-- 控制按钮 -->
           <div class="graph-controls">
             <button class="control-btn" id="zoom-in">+</button>
             <button class="control-btn" id="zoom-out">-</button>
@@ -136,17 +395,34 @@
         </div>
       </section>
 
+      <!-- 智能 Inspector -->
       <aside class="inspector-card">
         <div class="section-head">
           <div>
-            <h3>Inspector</h3>
-            <p id="inspector-meta">选择节点查看详情</p>
+            <h3>情报透视仪</h3>
+            <p id="inspector-meta">选择节点探索详情</p>
           </div>
         </div>
         <div class="inspector-scroll-area" id="inspector-body">
-          <div class="empty-note">点击节点或边以查看详细情报</div>
+          <div class="empty-note">点击节点或边以启动情报深度探针</div>
         </div>
       </aside>
+    </section>
+
+    <!-- 底部时间轴沙盘 -->
+    <section class="temporal-playback-bar">
+      <div class="timeline-meta">
+        <div class="timeline-title">
+          <span>⏳ 时序沙盘演变回放</span>
+          <span style="color: var(--neon-cyan);" id="val-time-display">2026年05月</span>
+        </div>
+        <button class="play-btn" id="btn-play-timeline" onclick="toggleTimelinePlay()">▶ 自动播放</button>
+      </div>
+      <div style="width: 100%; display: flex; align-items: center; gap: 1rem;">
+        <span style="font-size:0.75rem; color:#8c9cb3;" id="time-min-label">2026-04-01</span>
+        <input type="range" id="slider-timeline" class="cyber-slider" style="flex: 1; height: 6px;" min="0" max="100" value="100" oninput="updateTimeFilter(this.value)">
+        <span style="font-size:0.75rem; color:#8c9cb3;" id="time-max-label">2026-05-31</span>
+      </div>
     </section>
   </main>
 
@@ -156,31 +432,174 @@
     const api = window.apiClient;
     let graph = new graphology.Graph();
     let renderer = null;
-    let expandedSummaries = new Set();
 
+    // 数据缓存
+    let rawNodes = [];
+    let rawLinks = [];
+    
+    // 交互状态
+    let currentViewMode = 'topology'; // 'topology' | 'geo'
+    let currentMinWeight = 2;
+    let currentFilterTime = null; // 时序回放过滤值
+    let isPlaying = false;
+    let playTimer = null;
+    let focusedNodeId = null; // 双击或选择锁定的核心聚焦节点
+    let hoveredNodeId = null; // 悬浮高亮
+
+    // 微观下钻状态定义
+    let currentGraphLevel = 'global'; // 'global' | 'detail'
+    let currentSummaryId = null;      // 记录下钻的 L2 Summary ID
+    let currentSummaryData = null;    // 当前 Summary 节点的元数据
+    let detailNodes = [];             // 缓存内部原子节点
+    let detailEdges = [];             // 缓存内部原子边
+
+    // 地缘国家核心经纬度配对
+    const GEO_COORDS = {
+      'CN': { name: '中国/亚太', lng: 110, lat: 33 },
+      'US': { name: '美国/北美', lng: -98, lat: 39 },
+      'RU': { name: '俄罗斯/欧亚', lng: 95, lat: 60 },
+      'IL': { name: '中东/以色列', lng: 35, lat: 31 },
+      'IR': { name: '中东/伊朗', lng: 53, lat: 32 },
+      'EU': { name: '欧洲盟国', lng: 15, lat: 50 },
+      'TW': { name: '台湾海峡', lng: 121, lat: 23 },
+      'GL': { name: '全球/地缘交汇', lng: -35, lat: 15 }
+    };
+
+    // 赛步各大洲高保真折线顶点数据（以真实地球经纬度为基准，Canvas 动态投影绘制出精致的赛博朋克世界轮廓，100% 解决原版抽象不真实问题）
+    const CONTINENTS = [
+      // 欧亚非大陆（包含西欧海岸线、非洲大陆轮廓、红海、阿拉伯半岛、印度半岛、中南半岛、中国漫长海岸线与西伯利亚北冰洋沿岸）
+      [
+        [-10, 62], [0, 60], [10, 58], [15, 62], [25, 71], [35, 69], [45, 68], [60, 70], [80, 73], [105, 77],
+        [130, 73], [160, 76], [175, 66], [170, 60], [150, 56], [140, 53], [142, 43], [130, 42], [125, 38], [122, 30],
+        [118, 22], [110, 20], [108, 15], [105, 10], [98, 8], [96, 20], [90, 22], [80, 8], [75, 12], [72, 20],
+        [68, 25], [60, 24], [58, 12], [48, 14], [44, 25], [38, 30], [35, 15], [45, 5], [50, -15], [40, -30],
+        [30, -34], [18, -34], [10, -22], [8, -5], [-13, 5], [-16, 16], [-10, 32], [-5, 36], [10, 37], [25, 35],
+        [30, 31], [32, 28], [25, 23], [15, 15], [5, 5], [10, -10], [15, 5], [20, 15], [30, 30], [20, 35],
+        [5, 36], [-5, 43], [-10, 50], [-10, 62]
+      ],
+      // 欧洲离岛：不列颠群岛（大不列颠及爱尔兰岛极简组合）
+      [
+        [-8, 50], [-5, 58], [-2, 58], [2, 51], [-4, 50]
+      ],
+      // 亚太离岛：日本列岛
+      [
+        [130, 32], [132, 34], [138, 38], [142, 44], [140, 36], [135, 33], [130, 32]
+      ],
+      // 格陵兰岛
+      [
+        [-60, 60], [-50, 60], [-30, 70], [-20, 80], [-40, 83], [-60, 80], [-70, 76], [-60, 60]
+      ],
+      // 北美洲大陆（包含阿拉斯加、加拿大群岛南界、哈德逊湾、拉布拉多半岛、墨西哥湾、中美洲地峡）
+      [
+        [-168, 65], [-150, 70], [-120, 70], [-100, 70], [-80, 70], [-70, 60], [-60, 50], [-50, 48], [-60, 44], [-70, 42],
+        [-80, 25], [-80, 9], [-77, 8], [-83, 10], [-90, 15], [-100, 16], [-105, 20], [-110, 23], [-115, 32], [-125, 40],
+        [-125, 48], [-135, 55], [-150, 59], [-165, 60], [-168, 65]
+      ],
+      // 南美洲大陆（德雷克海峡北界、巴西高原海岸线、加勒比海海岸）
+      [
+        [-80, 12], [-72, 10], [-60, 10], [-50, -5], [-35, -6], [-40, -20], [-50, -35], [-60, -45], [-70, -55], [-75, -53],
+        [-72, -40], [-70, -20], [-80, -5], [-81, 5], [-80, 12]
+      ],
+      // 澳大利亚大陆
+      [
+        [113, -24], [114, -35], [120, -35], [135, -38], [145, -38], [151, -34], [150, -25], [142, -10], [136, -11], [130, -15],
+        [122, -15], [113, -24]
+      ],
+      // 非洲东海岸岛屿：马达加斯加岛
+      [
+        [49, -12], [51, -16], [47, -25], [44, -25], [46, -16], [49, -12]
+      ]
+    ];
+
+    // 地缘热点自动提取器
+    function getGeoKey(title, desc) {
+      const text = ((title || '') + ' ' + (desc || '')).toLowerCase();
+      if (text.includes('中国') || text.includes('china') || text.includes('亚太') || text.includes('南海') || text.includes('北京') || text.includes('上海') || text.includes('深圳')) {
+        if (text.includes('台湾') || text.includes('taiwan') || text.includes('台海')) return 'TW';
+        return 'CN';
+      }
+      if (text.includes('美国') || text.includes('us ') || text.includes('america') || text.includes('华盛顿') || text.includes('白宫') || text.includes('pentagon')) {
+        return 'US';
+      }
+      if (text.includes('俄罗斯') || text.includes('russia') || text.includes('乌克兰') || text.includes('莫斯科') || text.includes('俄军') || text.includes('基辅')) {
+        return 'RU';
+      }
+      if (text.includes('以色列') || text.includes('israel') || text.includes('加沙') || text.includes('哈马斯') || text.includes('巴勒斯坦')) {
+        return 'IL';
+      }
+      if (text.includes('伊朗') || text.includes('iran') || text.includes('德黑兰') || text.includes('革命卫队')) {
+        return 'IR';
+      }
+      if (text.includes('欧洲') || text.includes('europe') || text.includes('北约') || text.includes('欧盟') || text.includes('英国') || text.includes('法国') || text.includes('德国')) {
+        return 'EU';
+      }
+      return 'GL'; // 归入公海/地缘交汇区
+    }
+
+    // 初始化 Sigma 渲染引擎
     async function initGraph() {
-      const container = document.getElementById('sigma-host');
+      const sigmaContainer = document.getElementById('sigma-canvas');
       
-      renderer = new Sigma(graph, container, {
+      renderer = new Sigma(graph, sigmaContainer, {
         renderEdgeLabels: true,
-        defaultEdgeType: "arrow",
-        labelFont: "Outfit, Inter, sans-serif",
+        defaultEdgeType: "line",
+        labelFont: "Outfit, 'Segoe UI', sans-serif",
         labelSize: 11,
         labelColor: { color: "#d7e3f5" },
-        stagePadding: 50,
+        stagePadding: 50
       });
 
-      // 交互监听
+      // 交互监听：高亮与淡化处理
+      renderer.on("enterNode", ({ node }) => {
+        hoveredNodeId = node;
+        updateNodesAndEdgesOpacity();
+      });
+
+      renderer.on("leaveNode", () => {
+        hoveredNodeId = null;
+        updateNodesAndEdgesOpacity();
+      });
+
+      // 单击聚焦与下钻交互
       renderer.on("clickNode", ({ node }) => {
         const attr = graph.getNodeAttributes(node);
-        showInspector(attr);
-        if (attr.nodeType === 'summary') {
-          if (expandedSummaries.has(node)) {
-            collapseSummary(node);
-          } else {
-            expandSummary(node);
+        console.log('[Sigma ClickNode] ID:', node, 'Type:', attr.nodeType, 'Level:', currentGraphLevel);
+        
+        if (currentGraphLevel === 'global') {
+          if (attr.nodeType === 'summary') {
+            enterDetailMode(node);
+          }
+        } else {
+          if (attr.nodeType === 'atomic') {
+            focusedNodeId = node;
+            updateNodesAndEdgesOpacity();
+            showAtomicInspector(attr.data);
+            renderer.getCamera().animate({ x: attr.x, y: attr.y, ratio: 0.15 }, { duration: 500 });
           }
         }
+      });
+
+      // 双击下钻与锁定
+      renderer.on("doubleClickNode", ({ node }) => {
+        const attr = graph.getNodeAttributes(node);
+        console.log('[Sigma DoubleClickNode] ID:', node, 'Type:', attr.nodeType, 'Level:', currentGraphLevel);
+        
+        if (currentGraphLevel === 'global') {
+          if (attr.nodeType === 'summary') {
+            enterDetailMode(node);
+          }
+        } else {
+          if (attr.nodeType === 'atomic') {
+            focusedNodeId = node;
+            updateNodesAndEdgesOpacity();
+            renderer.getCamera().animate({ x: attr.x, y: attr.y, ratio: 0.1 }, { duration: 500 });
+          }
+        }
+      });
+
+      // 照相机 process 更新时，自动重绘底层 Canvas 世界地图（绝对物理贴合对齐！）
+      renderer.getCamera().on("updated", () => {
+        drawCyberWorldMap();
       });
 
       document.getElementById('zoom-in').addEventListener('click', () => renderer.getCamera().animatedZoom());
@@ -188,6 +607,76 @@
       document.getElementById('zoom-reset').addEventListener('click', () => renderer.getCamera().animatedReset());
 
       await loadGlobalGraph();
+    }
+
+    // 绘制霓虹发光世界地图 (采用 renderer.graphToViewport 绝对物理坐标对齐，根治 undefined 延迟与错位)
+    function drawCyberWorldMap() {
+      const canvas = document.getElementById('geo-map-canvas');
+      if (currentViewMode !== 'geo' || !canvas || !renderer) return;
+
+      const ctx = canvas.getContext('2d');
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      
+      // 同步 Canvas 实际分辨率，防止出现模糊
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+
+      // 官方自带物理投影变换函数，绝对可靠！
+      const geoToScreen = (lng, lat) => {
+        // graph坐标系对应的绝对位置为: x = lng * 3.5, y = -lat * 4.5
+        return renderer.graphToViewport({ x: lng * 3.5, y: -lat * 4.5 });
+      };
+
+      // 1. 绘制极淡的赛博经纬度网格线
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.04)';
+      ctx.lineWidth = 1;
+      for (let lng = -150; lng <= 150; lng += 30) {
+        const pStart = geoToScreen(lng, 80);
+        const pEnd = geoToScreen(lng, -80);
+        ctx.beginPath();
+        ctx.moveTo(pStart.x, pStart.y);
+        ctx.lineTo(pEnd.x, pEnd.y);
+        ctx.stroke();
+      }
+      for (let lat = -60; lat <= 60; lat += 20) {
+        const pStart = geoToScreen(-180, lat);
+        const pEnd = geoToScreen(180, lat);
+        ctx.beginPath();
+        ctx.moveTo(pStart.x, pStart.y);
+        ctx.lineTo(pEnd.x, pEnd.y);
+        ctx.stroke();
+      }
+
+      // 2. 绘制各大洲赛博多边形板块轮廓（带有动态发光外描边）
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(0, 212, 255, 0.4)';
+      
+      CONTINENTS.forEach(continent => {
+        ctx.beginPath();
+        continent.forEach((point, i) => {
+          const screenPos = geoToScreen(point[0], point[1]);
+          if (i === 0) {
+            ctx.moveTo(screenPos.x, screenPos.y);
+          } else {
+            ctx.lineTo(screenPos.x, screenPos.y);
+          }
+        });
+        ctx.closePath();
+
+        // 极淡发光内填充 + 霓虹发光外轮廓，高地缘逼格溢出屏幕！
+        ctx.fillStyle = 'rgba(0, 212, 255, 0.035)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.22)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+
+      ctx.shadowBlur = 0; // 重置阴影
     }
 
     function getSummaryColor(memberCount, isIsolated) {
@@ -199,237 +688,871 @@
       return '#00d4ff';
     }
 
+    // 智能图谱几何中心自适应居中对齐与缩放算法 (防零与排版延迟就绪安全保护版)
+    function fitGraphToView(animateDuration = 300) {
+      if (graph.order === 0 || !renderer) return;
+
+      // 兼容全局 'summary' 节点与下钻微观 'atomic' 节点，提取当前非 hidden 的活跃可视节点
+      const activeNodes = graph.nodes().filter(n => {
+        const attr = graph.getNodeAttributes(n);
+        return (attr.nodeType === 'summary' || attr.nodeType === 'atomic') && !attr.hidden;
+      });
+
+      console.log('[fitGraphToView][LOG] Camera autoconfig triggered. activeNodesLength =', activeNodes.length, 'graphOrder =', graph.order);
+
+      if (activeNodes.length === 0) return;
+
+      // 使用官方推荐的 Camera.animatedReset() 方法，让 Sigma 内部自动基于当前所有可视节点的归一化包围盒自适应居中，
+      // 物理对齐精度 100%，彻底根治手动计算绝对坐标在 Viewport 与 Camera 空间中引起的飞出和黑屏崩溃 Bug
+      renderer.getCamera().animatedReset();
+
+      // 针对地缘沙盘 (geo 模式) 绝大部分强地缘节点聚集在北半球 (y < 0 空间) 的特质，
+      // 动态向北半球 (y 轴负方向) 偏移相机焦点，使世界地图和红光节点能端端正正地居中在 Canvas 黑框正中央！
+      if (currentViewMode === 'geo') {
+        setTimeout(() => {
+          if (renderer && currentViewMode === 'geo') {
+            const camera = renderer.getCamera();
+            const beforeState = camera.getState();
+            // 北半球方向微调偏移以自适应垂直居中 (屏幕上往上移)
+            camera.animate({
+              y: beforeState.y - 45.0
+            }, { duration: 180 });
+            
+            setTimeout(() => {
+              if (renderer) {
+                console.log('[fitGraphToView][LOG] Geo mode Y-offset shift applied. BeforeY =', beforeState.y, 'AfterY =', renderer.getCamera().getState().y);
+              }
+            }, 200);
+          }
+        }, 320); // 留出充足时间等待 Sigma 归一化重绘完毕
+      }
+    }
+
+    // 全局数据载入
     async function loadGlobalGraph() {
-      document.getElementById('graph-status').textContent = '加载全局关系层...';
-      graph.clear();
-      expandedSummaries.clear();
+      document.getElementById('list-meta').textContent = '加载全局中...';
+      focusedNodeId = null;
+      document.getElementById('btn-focus-reset').style.display = 'none';
 
       try {
-        // 调用新的全局 API (需在 apiClient 中定义)
-        const response = await api.getGlobalRelationshipSummaryGraph({ limit: 100, minMemberCount: 1 });
-        const { nodes, links } = response.data;
+        const sourceVal = document.getElementById('filter-source').value;
+        const response = await api.getGlobalRelationshipSummaryGraph({ limit: 100, minMemberCount: 1, source: sourceVal });
+        
+        let { nodes, links } = response.data;
 
-        nodes.forEach((n, i) => {
-          const angle = (i / nodes.length) * Math.PI * 2;
-          
-          const memberCount = n.member_count || 1;
-          const nodeColor = getSummaryColor(memberCount, n.summary_kind === 'isolated');
+        rawNodes = nodes;
+        rawLinks = links;
 
-          // 尺寸使用对数，防止过大占据整个屏幕
-          const nodeSize = Math.max(Math.min(Math.log(memberCount + 1) * 3 + 3, 15), 4);
-
-          graph.addNode(String(n.id), {
-            label: n.title || `Summary ${n.id}`,
-            x: Math.cos(angle) * 300,
-            y: Math.sin(angle) * 300,
-            size: nodeSize,
-            color: nodeColor,
-            nodeType: 'summary',
-            data: n
-          });
-        });
-
-        links.forEach(l => {
-          if (graph.hasNode(String(l.source)) && graph.hasNode(String(l.target))) {
-            let edgeLabel = `${l.weight} 关联`;
-            let edgeColor = "rgba(0, 212, 255, 0.2)";
+        // 计算时间轴范围
+        if (nodes.length > 0) {
+          const times = nodes.map(n => new Date(n.time_start).getTime()).filter(t => !isNaN(t));
+          if (times.length > 0) {
+            const minTime = Math.min(...times);
+            const maxTime = Math.max(...times);
             
-            // 提醒 2 一对多桥接展示的后续适配：区分普通物理边共享和原子节点桥接共享
+            document.getElementById('time-min-label').textContent = new Date(minTime).toLocaleDateString();
+            document.getElementById('time-max-label').textContent = new Date(maxTime).toLocaleDateString();
+            
+            const slider = document.getElementById('slider-timeline');
+            slider.min = minTime;
+            slider.max = maxTime;
+            slider.value = maxTime;
+            currentFilterTime = maxTime;
+            document.getElementById('val-time-display').textContent = new Date(maxTime).toLocaleDateString();
+          }
+        }
+
+        renderVisualGraph();
+      } catch (err) {
+        console.error(err);
+        document.getElementById('list-meta').textContent = '加载失败';
+      }
+    }
+
+    // 核心渲染器
+    function renderVisualGraph() {
+      graph.clear();
+
+      if (rawNodes.length === 0) {
+        document.getElementById('list-meta').textContent = '暂无符合筛选的数据';
+        updateNodeList([]);
+        return;
+      }
+
+      const summaryOffsets = {};
+      const getOffset = (geo) => {
+        if (!summaryOffsets[geo]) summaryOffsets[geo] = 0;
+        const index = summaryOffsets[geo]++;
+        if (index === 0) return { dx: 0, dy: 0 };
+        const radius = 12 + Math.floor(index / 8) * 8;
+        const angle = (index % 8) * Math.PI * 0.25;
+        return {
+          dx: Math.cos(angle) * radius,
+          dy: Math.sin(angle) * radius
+        };
+      };
+
+      // 1. 添加 Summary 节点
+      rawNodes.forEach((n, i) => {
+        const memberCount = n.member_count || 1;
+        const nodeColor = getSummaryColor(memberCount, n.summary_kind === 'isolated');
+        const nodeSize = Math.max(Math.min(Math.log(memberCount + 1) * 3 + 3, 14), 4.5);
+
+        const angle = (i / rawNodes.length) * Math.PI * 2;
+        const topoX = Math.cos(angle) * 250;
+        const topoY = Math.sin(angle) * 250;
+
+        const geoKey = getGeoKey(n.title, n.description);
+        const geo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+        const geoXY = { x: geo.lng * 3.5, y: -geo.lat * 4.5 };
+        const offset = getOffset(geoKey);
+
+        const isGeoMode = (currentViewMode === 'geo');
+        const finalX = isGeoMode ? (geoXY.x + offset.dx) : topoX;
+        const finalY = isGeoMode ? (geoXY.y + offset.dy) : topoY;
+
+        const isTimeHidden = currentFilterTime && (new Date(n.time_start).getTime() > currentFilterTime);
+
+        graph.addNode(String(n.id), {
+          label: n.title ? (n.title.substring(0, 15) + (n.title.length > 15 ? '...' : '')) : `Summary ${n.id}`,
+          x: finalX,
+          y: finalY,
+          size: nodeSize,
+          color: nodeColor,
+          nodeType: 'summary',
+          parentSummary: null,
+          hidden: isTimeHidden,
+          data: n,
+          originalX: topoX,
+          originalY: topoY,
+          geoX: geoXY.x + offset.dx,
+          geoY: geoXY.y + offset.dy
+        });
+      });
+
+      // 2. 添加连线（滑块过滤）
+      rawLinks.forEach(l => {
+        if (l.weight >= currentMinWeight) {
+          if (graph.hasNode(String(l.source)) && graph.hasNode(String(l.target))) {
+            let edgeLabel = `${l.weight}`;
+            let edgeColor = "rgba(0, 212, 255, 0.15)";
+            
             if (l.bridge_weight > 0 && l.edge_weight > 0) {
-              edgeLabel = `${l.edge_weight}边 | ${l.bridge_weight}桥接`;
-              edgeColor = "rgba(46, 213, 115, 0.5)"; // 桥接与物理边混合 (翠绿色)
+              edgeLabel = `${l.edge_weight}边 | ${l.bridge_weight}桥`;
+              edgeColor = "rgba(46, 213, 115, 0.4)";
             } else if (l.bridge_weight > 0) {
-              edgeLabel = `${l.bridge_weight} 桥接`;
-              edgeColor = "rgba(123, 237, 159, 0.4)"; // 纯原子节点桥接 (浅荧光绿)
+              edgeLabel = `${l.bridge_weight}桥`;
+              edgeColor = "rgba(165, 94, 234, 0.35)";
             } else if (l.edge_weight > 0) {
-              edgeLabel = `${l.edge_weight} 物理关联`;
-              edgeColor = "rgba(0, 212, 255, 0.3)"; // 纯物理边 (亮蓝色)
+              edgeLabel = `${l.edge_weight}边`;
+              edgeColor = "rgba(0, 212, 255, 0.25)";
             }
 
             graph.addEdge(String(l.source), String(l.target), {
-              size: Math.log(l.weight + 1) * 2,
+              size: Math.max(Math.min(Math.log(l.weight + 1) * 1.5, 5), 1),
               color: edgeColor,
-              label: edgeLabel
+              label: edgeLabel,
+              hidden: false,
+              weight: l.weight
             });
           }
-        });
-
-        // 这里可以使用简单的布局
-        document.getElementById('graph-status').textContent = `已加载 ${nodes.length} 个关系节点`;
-        updateNodeList(nodes, false);
-      } catch (err) {
-        console.error(err);
-        document.getElementById('graph-status').textContent = '加载失败';
-      }
-    }
-
-    function collapseSummary(summaryId) {
-      if (!expandedSummaries.has(summaryId)) return;
-      
-      const nodesToRemove = [];
-      graph.forEachNode((node, attr) => {
-        if (attr.parentSummary === summaryId) {
-          nodesToRemove.push(node);
         }
       });
+
+      document.getElementById('list-meta').textContent = `展示 ${rawNodes.filter(n => !graph.getNodeAttribute(String(n.id), 'hidden')).length}/${rawNodes.length} 节点`;
+      updateNodeList(rawNodes);
+
+      // 加入 100ms 的排版就绪延迟 Schedule，保证 client 宽高稳定获取，彻底根治渲染偏移和越界截断
+      setTimeout(() => {
+        if (renderer) {
+          renderer.refresh();
+          fitGraphToView(250);
+        }
+      }, 100);
+
+      updateNodesAndEdgesOpacity();
       
-      nodesToRemove.forEach(n => graph.dropNode(n));
-      expandedSummaries.delete(summaryId);
-      
-      const nData = graph.getNodeAttribute(summaryId, 'data');
-      graph.setNodeAttribute(summaryId, 'color', getSummaryColor(nData.member_count || 1, nData.summary_kind === 'isolated'));
-      
-      document.getElementById('graph-status').textContent = `已收起节点 ${summaryId}`;
-      
-      // 恢复全局列表
-      const globalNodes = [];
-      graph.forEachNode((node, attr) => {
-        if (attr.nodeType === 'summary') globalNodes.push(attr.data);
-      });
-      updateNodeList(globalNodes, false);
+      // 触发一次地图重绘
+      drawCyberWorldMap();
     }
 
-    // 提醒 1 辅助函数：根据边类型渲染极其高端的 D3/Sigma 颜色配置
-    function getEdgeColor(type) {
-      const colors = {
-        'parent_child': 'rgba(112, 161, 255, 0.8)', // 经典亮蓝
-        'cause_effect': 'rgba(255, 107, 129, 0.9)', // 玫瑰艳红 (强因果)
-        'evolution': 'rgba(255, 165, 2, 0.8)',    // 亮丽暖橘 (逻辑演变)
-        'related': 'rgba(123, 237, 159, 0.5)',      // 柔和嫩绿 (松散关联)
-        'trigger': 'rgba(255, 159, 67, 0.9)',      // 闪耀鲜橙 (强触发)
-        'temporal': 'rgba(165, 94, 234, 0.75)',     // 梦幻紫罗兰 (时序推导)
-        'sub_event': 'rgba(46, 213, 115, 0.8)'      // 薄荷亮绿
-      };
-      return colors[type] || 'rgba(255, 255, 255, 0.4)';
-    }
+    // 动态调整透明度
+    function updateNodesAndEdgesOpacity() {
+      if (currentGraphLevel === 'global') {
+        if (focusedNodeId && graph.hasNode(focusedNodeId)) {
+          const neighbors = new Set(graph.neighbors(focusedNodeId));
+          neighbors.add(focusedNodeId);
 
-    async function expandSummary(summaryId) {
-      if (expandedSummaries.has(summaryId)) return;
-      
-      const attr = graph.getNodeAttributes(summaryId);
-      document.getElementById('graph-status').textContent = `正在展开 ${attr.label}...`;
-
-      try {
-        // 下钻获取内部原子事件
-        const response = await api.getRelationshipSummaryGraph(summaryId);
-        const { nodes, edges } = response.data;
-
-        const cx = attr.x;
-        const cy = attr.y;
-
-        nodes.forEach((n, i) => {
-          const id = `proto-${n.id}`;
-          if (!graph.hasNode(id)) {
-            const angle = (i / nodes.length) * Math.PI * 2;
-            // 将内部节点紧密环绕在 Summary 节点周围
-            const dist = 30 + Math.random() * 40;
-            graph.addNode(id, {
-              label: n.title || `原子事件 ${n.id}`,
-              x: cx + Math.cos(angle) * dist,
-              y: cy + Math.sin(angle) * dist,
-              size: 3,
-              color: "#ffffff",
-              nodeType: 'proto',
-              parentSummary: summaryId,
-              data: n
-            });
-
-            // 虚线连接到所属 Summary
-            if (!graph.hasEdge(id, summaryId) && !graph.hasEdge(summaryId, id)) {
-              graph.addEdge(id, summaryId, {
-                size: 1,
-                color: "rgba(255, 255, 255, 0.15)",
-                type: 'line' 
-              });
-            }
-          }
-        });
-
-        if (edges) {
-          edges.forEach(l => {
-            const s = `proto-${l.source}`;
-            const t = `proto-${l.target}`;
-            if (graph.hasNode(s) && graph.hasNode(t) && !graph.hasEdge(s, t) && !graph.hasEdge(t, s)) {
-              graph.addEdge(s, t, {
-                label: l.type === 'temporal' ? '时序' : (l.type || '关联'),
-                size: l.type === 'temporal' ? 1 : Math.min(Math.log(l.weight + 1) + 1, 4),
-                color: getEdgeColor(l.type),
-                data: l
-              });
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'summary') return;
+            if (neighbors.has(node)) {
+              graph.setNodeAttribute(node, 'color', getSummaryColor(attr.data.member_count, attr.data.summary_kind === 'isolated'));
+              graph.setNodeAttribute(node, 'label', attr.data.title);
+            } else {
+              graph.setNodeAttribute(node, 'color', 'rgba(100, 110, 120, 0.05)');
+              graph.setNodeAttribute(node, 'label', '');
             }
           });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            if ((source === focusedNodeId || target === focusedNodeId) && attr.weight >= currentMinWeight) {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(0, 212, 255, 0.6)');
+              graph.setEdgeAttribute(edge, 'size', 3);
+            } else {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(255, 255, 255, 0.01)');
+            }
+          });
+        } else if (hoveredNodeId && graph.hasNode(hoveredNodeId)) {
+          const neighbors = new Set(graph.neighbors(hoveredNodeId));
+          neighbors.add(hoveredNodeId);
+
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'summary') return;
+            if (neighbors.has(node)) {
+              graph.setNodeAttribute(node, 'color', getSummaryColor(attr.data.member_count, attr.data.summary_kind === 'isolated'));
+            } else {
+              graph.setNodeAttribute(node, 'color', 'rgba(100, 110, 120, 0.08)');
+            }
+          });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            if ((source === hoveredNodeId || target === hoveredNodeId) && attr.weight >= currentMinWeight) {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(0, 212, 255, 0.65)');
+            } else {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(255, 255, 255, 0.02)');
+            }
+          });
+        } else {
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'summary') return;
+            graph.setNodeAttribute(node, 'color', getSummaryColor(attr.data.member_count, attr.data.summary_kind === 'isolated'));
+            graph.setNodeAttribute(node, 'label', attr.data.title ? (attr.data.title.substring(0, 15) + (attr.data.title.length > 15 ? '...' : '')) : `Summary ${node}`);
+          });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            let origColor = "rgba(0, 212, 255, 0.15)";
+            if (attr.label && attr.label.includes('桥')) {
+              origColor = "rgba(165, 94, 234, 0.25)";
+            } else if (attr.label && attr.label.includes('边')) {
+              origColor = "rgba(0, 212, 255, 0.22)";
+            }
+            graph.setEdgeAttribute(edge, 'color', origColor);
+            graph.setEdgeAttribute(edge, 'size', Math.max(Math.min(Math.log(attr.weight + 1) * 1.5, 5), 1));
+          });
         }
-
-        expandedSummaries.add(summaryId);
-        graph.setNodeAttribute(summaryId, 'color', '#2ed573');
-        document.getElementById('graph-status').textContent = `已展开，新增 ${nodes.length} 个原子事件`;
-        updateNodeList(nodes, true);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    function showInspector(attr) {
-      const body = document.getElementById('inspector-body');
-      const data = attr.data;
-      if (attr.nodeType === 'summary') {
-        body.innerHTML = `
-          <div class="lineage-card">
-            <div class="eyebrow">关系层节点 (L2 Summary)</div>
-            <h4>${data.title}</h4>
-            <p>${data.description || '无描述'}</p>
-            <div class="chip-row">
-              <span class="chip info">${data.member_count} 成员</span>
-              <span class="chip success">${data.edge_count} 内部边</span>
-            </div>
-            <div style="margin-top:1rem">
-              <small>时间范围: ${new Date(data.time_start).toLocaleDateString()} - ${new Date(data.time_end).toLocaleDateString()}</small>
-            </div>
-          </div>
-        `;
       } else {
-        body.innerHTML = `
-          <div class="lineage-card">
-            <div class="eyebrow">原子事件 (L1 ProtoEvent)</div>
-            <h4>${data.title}</h4>
-            <p>${data.description || '无解析描述'}</p>
-            <div class="chip-row">
-              <span class="chip warn">${data.event_type}</span>
-              <span class="chip">ID: ${data.id}</span>
-            </div>
-          </div>
-        `;
+        // 微观原子图高亮逻辑
+        if (focusedNodeId && graph.hasNode(focusedNodeId)) {
+          const neighbors = new Set(graph.neighbors(focusedNodeId));
+          neighbors.add(focusedNodeId);
+
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'atomic') return;
+            if (neighbors.has(node)) {
+              graph.setNodeAttribute(node, 'color', '#00d4ff');
+              graph.setNodeAttribute(node, 'label', attr.data.title);
+            } else {
+              graph.setNodeAttribute(node, 'color', 'rgba(100, 110, 120, 0.05)');
+              graph.setNodeAttribute(node, 'label', '');
+            }
+          });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            if (source === focusedNodeId || target === focusedNodeId) {
+              const isTemp = attr.edgeType === 'temporal';
+              graph.setEdgeAttribute(edge, 'color', isTemp ? 'rgba(165, 94, 234, 0.85)' : 'rgba(0, 212, 255, 0.8)');
+              graph.setEdgeAttribute(edge, 'size', 3);
+            } else {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(255, 255, 255, 0.01)');
+            }
+          });
+        } else if (hoveredNodeId && graph.hasNode(hoveredNodeId)) {
+          const neighbors = new Set(graph.neighbors(hoveredNodeId));
+          neighbors.add(hoveredNodeId);
+
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'atomic') return;
+            if (neighbors.has(node)) {
+              graph.setNodeAttribute(node, 'color', '#00d4ff');
+            } else {
+              graph.setNodeAttribute(node, 'color', 'rgba(100, 110, 120, 0.08)');
+            }
+          });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            if (source === hoveredNodeId || target === hoveredNodeId) {
+              const isTemp = attr.edgeType === 'temporal';
+              graph.setEdgeAttribute(edge, 'color', isTemp ? 'rgba(165, 94, 234, 0.75)' : 'rgba(0, 212, 255, 0.75)');
+            } else {
+              graph.setEdgeAttribute(edge, 'color', 'rgba(255, 255, 255, 0.02)');
+            }
+          });
+        } else {
+          graph.forEachNode((node, attr) => {
+            if (attr.nodeType !== 'atomic') return;
+            graph.setNodeAttribute(node, 'color', '#00d4ff');
+            graph.setNodeAttribute(node, 'label', attr.data.title ? (attr.data.title.substring(0, 15) + (attr.data.title.length > 15 ? '...' : '')) : `Event ${node}`);
+          });
+
+          graph.forEachEdge((edge, attr, source, target) => {
+            const isTemp = attr.edgeType === 'temporal';
+            graph.setEdgeAttribute(edge, 'color', isTemp ? 'rgba(165, 94, 234, 0.35)' : 'rgba(0, 212, 255, 0.3)');
+            graph.setEdgeAttribute(edge, 'size', isTemp ? 1.5 : Math.max(Math.min(Math.log(attr.weight + 1) * 1.5, 5), 1.5));
+          });
+        }
       }
+      
+      renderer.refresh();
     }
 
-    function updateNodeList(nodes, isProto = false) {
-      const list = document.getElementById('node-list');
-      if (isProto) {
-        document.getElementById('list-meta').textContent = `当前展示内部原子事件`;
-        list.innerHTML = nodes.map(n => `
-          <div class="stack-item" onclick="focusNode('proto-${n.id}')">
-            <div class="item-title" style="font-size:0.85rem">${n.title}</div>
-            <div class="chip-row"><span class="chip warn">${n.event_type || '原子'}</span></div>
-          </div>
-        `).join('');
+    // 切换视角
+    window.switchViewMode = (mode) => {
+      if (currentViewMode === mode) return;
+      currentViewMode = mode;
+
+      // 100% 根治脏状态跨视图残留黑屏崩溃 Bug：切换模式时彻底将 Camera 交互状态擦除复位
+      if (renderer) {
+        console.log('[switchViewMode][LOG] ViewMode changed. Resetting camera matrices to default.');
+        renderer.getCamera().animatedReset();
+      }
+
+      const canvas = document.getElementById('geo-map-canvas');
+      document.querySelectorAll('.view-tab').forEach(btn => btn.classList.remove('active'));
+      
+      if (mode === 'topology') {
+        document.getElementById('tab-topology').classList.add('active');
+        document.getElementById('graph-legend').style.display = 'flex';
+        if (canvas) canvas.style.display = 'none';
       } else {
-        document.getElementById('list-meta').textContent = `关系层节点: ${nodes.length}`;
-        list.innerHTML = nodes.map(n => `
-          <div class="stack-item" onclick="focusNode('${n.id}')">
-            <div class="item-title">${n.title}</div>
-            <div class="chip-row"><span class="chip info">${n.member_count} 成员</span></div>
-          </div>
-        `).join('');
+        document.getElementById('tab-geo').classList.add('active');
+        document.getElementById('graph-legend').style.display = 'none';
+        if (canvas) canvas.style.display = 'block';
       }
-    }
 
-    window.focusNode = (id) => {
-      const attr = graph.getNodeAttributes(id);
-      renderer.getCamera().animate({ x: attr.x, y: attr.y, ratio: 0.2 }, { duration: 500 });
-      showInspector(attr);
+      renderVisualGraph();
+      
+      // 切换视图后排版就绪后居中
+      setTimeout(() => {
+        if (renderer) {
+          renderer.refresh();
+          fitGraphToView(200);
+        }
+      }, 120);
     };
 
-    document.getElementById('apply-filters').addEventListener('click', loadGlobalGraph);
+    // 边密度调节
+    window.updateLinkFilter = (val) => {
+      currentMinWeight = parseInt(val, 10);
+      document.getElementById('val-link-weight').textContent = `${val} 关联`;
+      renderVisualGraph();
+    };
+
+    // 来源筛选
+    window.onFilterChange = () => {
+      loadGlobalGraph();
+    };
+
+    // 时序筛选
+    window.updateTimeFilter = (val) => {
+      currentFilterTime = parseInt(val, 10);
+      document.getElementById('val-time-display').textContent = new Date(currentFilterTime).toLocaleDateString();
+
+      let visibleCount = 0;
+      if (currentGraphLevel === 'global') {
+        rawNodes.forEach(n => {
+          const isTimeHidden = new Date(n.time_start).getTime() > currentFilterTime;
+          if (graph.hasNode(String(n.id))) {
+            graph.setNodeAttribute(String(n.id), 'hidden', isTimeHidden);
+            if (!isTimeHidden) visibleCount++;
+          }
+        });
+        document.getElementById('list-meta').textContent = `展示 ${visibleCount}/${rawNodes.length} 节点`;
+        updateNodeList(rawNodes); // 联动更新左侧宏观列表
+      } else {
+        detailNodes.forEach(n => {
+          const isTimeHidden = new Date(n.event_time).getTime() > currentFilterTime;
+          if (graph.hasNode(String(n.id))) {
+            graph.setNodeAttribute(String(n.id), 'hidden', isTimeHidden);
+            if (!isTimeHidden) visibleCount++;
+          }
+        });
+        document.getElementById('list-meta').textContent = `展示 ${visibleCount}/${detailNodes.length} 原子节点`;
+        updateDetailNodeList(detailNodes); // 联动更新左侧微观原子列表
+      }
+
+      renderer.refresh();
+      
+      // 时间线移动时，同样重绘一次地图
+      drawCyberWorldMap();
+    };
+
+    // 自动播放
+    window.toggleTimelinePlay = () => {
+      const btn = document.getElementById('btn-play-timeline');
+      const slider = document.getElementById('slider-timeline');
+      
+      if (isPlaying) {
+        isPlaying = false;
+        btn.textContent = '▶ 自动播放';
+        clearInterval(playTimer);
+      } else {
+        isPlaying = true;
+        btn.textContent = '⏸ 暂停';
+        
+        const minVal = parseInt(slider.min, 10);
+        const maxVal = parseInt(slider.max, 10);
+        
+        if (parseInt(slider.value, 10) >= maxVal) {
+          slider.value = minVal;
+        }
+
+        const step = (maxVal - minVal) / 25;
+        playTimer = setInterval(() => {
+          let curr = parseInt(slider.value, 10) + step;
+          if (curr >= maxVal) {
+            curr = maxVal;
+            isPlaying = false;
+            btn.textContent = '▶ 自动播放';
+            clearInterval(playTimer);
+          }
+          slider.value = curr;
+          updateTimeFilter(curr);
+        }, 800);
+      }
+    };
+
+    // 解锁核心锁定
+    window.resetFocusMode = () => {
+      focusedNodeId = null;
+      document.getElementById('btn-focus-reset').style.display = 'none';
+      updateNodesAndEdgesOpacity();
+      fitGraphToView(400);
+    };
+
+    // 重置全局
+    window.resetGlobalView = () => {
+      document.getElementById('filter-source').value = '';
+      document.getElementById('slider-link-weight').value = 2;
+      currentMinWeight = 2;
+      document.getElementById('val-link-weight').textContent = '2 关联';
+      loadGlobalGraph();
+    };
+
+    // 构建并展示时序故事树 (已加入完善的报错捕获和日志回显)
+    async function showInspector(attr) {
+      const body = document.getElementById('inspector-body');
+      const data = attr.data;
+      
+      console.log('[Inspector] Loading summary node details. ID:', data.id, 'Title:', data.title);
+
+      const geoKey = getGeoKey(data.title, data.description);
+      const geoInfo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+
+      body.innerHTML = `
+        <div class="lineage-card" style="margin-bottom:1rem">
+          <div class="eyebrow" style="color: var(--neon-cyan)">关系层节点 (L2 Summary)</div>
+          <h4 style="color:#fff; font-size:1.05rem; margin:0.4rem 0;">${data.title}</h4>
+          <p style="color:#a5b5c9; font-size:0.8rem; line-height:1.4;">${data.description || '暂无描述'}</p>
+          <div class="chip-row" style="margin-top:0.6rem">
+            <span class="chip info" style="font-size:0.7rem">${data.member_count} 原子事件</span>
+            <span class="chip success" style="font-size:0.7rem">${data.edge_count} 关联边</span>
+            <span class="chip warn" style="font-size:0.7rem">📍 ${geoInfo.name}</span>
+          </div>
+          <div style="margin-top:0.8rem">
+            <small style="color:#576b85; font-size:0.7rem">起止时间: ${new Date(data.time_start).toLocaleDateString()} - ${new Date(data.time_end).toLocaleDateString()}</small>
+          </div>
+        </div>
+        
+        <div class="lineage-card" style="margin-bottom:1.5rem">
+          <div class="eyebrow" style="color: var(--neon-violet)">⏳ 时序故事链 (前因后果)</div>
+          <div class="relation-flow-tree" id="temporal-flow-loader">
+            <div style="color:#8c9cb3; font-size:0.75rem;">正在回溯时序上下文...</div>
+          </div>
+        </div>
+      `;
+
+      try {
+        // 请求该节点所在的完整成员，推演相邻故事链
+        console.log('[Inspector] Requesting endpoint: `/api/v1/dashboard/graph/summaries/' + data.id + '/detail`');
+        const response = await api.getRelationshipSummaryGraph(data.id);
+        
+        console.log('[Inspector] Endpoint response payload:', response);
+        const { nodes } = response.data;
+        
+        const loader = document.getElementById('temporal-flow-loader');
+        if (!nodes || nodes.length === 0) {
+          loader.innerHTML = '<div style="color:#8c9cb3; font-size:0.75rem;">该地缘事件独立发生，无显著前后关联。</div>';
+          return;
+        }
+
+        // 依时间排序获取前驱、中枢、后继事件
+        const sortedProtos = nodes
+          .filter(n => n.event_time)
+          .sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+
+        if (sortedProtos.length < 2) {
+          loader.innerHTML = '<div style="color:#8c9cb3; font-size:0.75rem;">原子证据不足，无法构成时序推演链条。</div>';
+          return;
+        }
+
+        const precursor = sortedProtos[0];
+        const current = sortedProtos[Math.floor(sortedProtos.length / 2)];
+        const successor = sortedProtos[sortedProtos.length - 1];
+
+        loader.innerHTML = `
+          <div class="flow-step precursor">
+            <div class="flow-step-label">💡 溯源起因 (Precursor)</div>
+            <div class="flow-step-content">${precursor.title}</div>
+            <div style="font-size:0.7rem; color:#8c9cb3;">${new Date(precursor.event_time).toLocaleDateString()}</div>
+          </div>
+          
+          <div class="flow-step current">
+            <div class="flow-step-label">🎯 当前核心事件 (Core Event)</div>
+            <div class="flow-step-content" style="color:var(--neon-cyan)">${current.title}</div>
+            <div style="font-size:0.7rem; color:#8c9cb3;">${new Date(current.event_time).toLocaleDateString()}</div>
+          </div>
+          
+          <div class="flow-step successor">
+            <div class="flow-step-label">⛓️ 衍生影响/后果 (Consequences)</div>
+            <div class="flow-step-content" style="color:var(--neon-green)">${successor.title}</div>
+            <div style="font-size:0.7rem; color:#8c9cb3;">${new Date(successor.event_time).toLocaleDateString()}</div>
+          </div>
+        `;
+      } catch (err) {
+        console.error('[Inspector] Error loading story chain details:', err);
+        const loader = document.getElementById('temporal-flow-loader');
+        loader.innerHTML = `
+          <div style="color:#ff4757; font-size:0.75rem; background:rgba(255,71,87,0.1); border:1px solid rgba(255,71,87,0.2); padding:6px; border-radius:4px;">
+            ⚠️ 请求后端数据出错，无法展开原子故事链：<br>
+            <span style="font-family:monospace;">${err.message || err}</span>
+          </div>
+        `;
+      }
+    }
+
+    // 更新左侧列表展示
+    function updateNodeList(nodes) {
+      const list = document.getElementById('node-list');
+      document.getElementById('list-title').textContent = `关系节点 (${nodes.length})`;
+      
+      const visibleNodes = nodes.filter(n => {
+        if (!graph.hasNode(String(n.id))) return false;
+        return !graph.getNodeAttribute(String(n.id), 'hidden');
+      });
+
+      document.getElementById('list-meta').textContent = `激活展示: ${visibleNodes.length} / ${nodes.length}`;
+      
+      if (visibleNodes.length === 0) {
+        list.innerHTML = '<div class="empty-note">此时间段内无活跃地缘事件</div>';
+        return;
+      }
+
+      list.innerHTML = visibleNodes.map(n => {
+        const geoKey = getGeoKey(n.title, n.description);
+        const geo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+        const primarySource = n.primary_source || (Array.isArray(n.sources) && n.sources.length ? n.sources[0] : 'unknown');
+        const sourceCount = n.sources?.length || Object.keys(n.source_counts || {}).length || 0;
+        const sourceLabel = primarySource === 'unknown' ? '未知来源' : DashboardShared.escapeHtml(primarySource);
+        return `
+          <div class="stack-item" onclick="focusNode('${n.id}')" style="border-left: 3px solid ${getSummaryColor(n.member_count, n.summary_kind === 'isolated')}">
+            <div class="item-title" style="font-weight:600;">${n.title}</div>
+            <div class="chip-row">
+              <span class="chip info" style="font-size:0.65rem">${n.member_count} 成员</span>
+              <span class="chip success" style="font-size:0.65rem; background:rgba(46, 213, 115, 0.08)">📰 ${sourceLabel}${sourceCount > 1 ? ` · ${sourceCount} 源` : ''}</span>
+              <span class="chip" style="font-size:0.65rem; background:rgba(255,255,255,0.04)">📍 ${geo.name}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 聚焦定位与分流
+    window.focusNode = (id) => {
+      console.log('[focusNode] Focus requested for ID:', id, 'Current Level:', currentGraphLevel);
+      if (currentGraphLevel === 'global') {
+        enterDetailMode(id);
+      } else {
+        focusAtomicNode(id);
+      }
+    };
+
+    // 聚焦微观原子事件节点
+    window.focusAtomicNode = (id) => {
+      console.log('[focusAtomicNode] Focusing atomic node ID:', id);
+      if (graph.hasNode(id)) {
+        const attr = graph.getNodeAttributes(id);
+        renderer.getCamera().animate({ x: attr.x, y: attr.y, ratio: 0.15 }, { duration: 500 });
+        focusedNodeId = id;
+        updateNodesAndEdgesOpacity();
+        showAtomicInspector(attr.data);
+      }
+    };
+
+    // ================== L1-L6 下钻与原子图谱控制 ==================
+    
+    // 进入微观原子图模式
+    window.enterDetailMode = async (summaryId) => {
+      console.log('[enterDetailMode] Loading L2 Summary ID:', summaryId);
+      
+      const btnBack = document.getElementById('btn-back-to-global');
+      const btnReset = document.getElementById('btn-reset-view');
+      const btnFocus = document.getElementById('btn-focus-reset');
+      
+      if (btnBack) btnBack.style.display = 'inline-block';
+      if (btnReset) btnReset.style.display = 'none';
+      if (btnFocus) btnFocus.style.display = 'none';
+      
+      document.getElementById('list-meta').textContent = '读取原子图中...';
+      focusedNodeId = null;
+      
+      try {
+        const response = await api.getRelationshipSummaryGraph(summaryId);
+        console.log('[enterDetailMode] Loaded L1 Atomic detail payload:', response);
+        
+        const { summary, nodes, edges } = response.data;
+        if (!nodes || nodes.length === 0) {
+          console.warn('[enterDetailMode] No atomic events returned for summary ID:', summaryId);
+          document.getElementById('list-meta').textContent = '无原子事件数据';
+          return;
+        }
+        
+        currentGraphLevel = 'detail';
+        currentSummaryId = summaryId;
+        currentSummaryData = summary;
+        detailNodes = nodes;
+        detailEdges = edges;
+        
+        // 1. 下方时间轴视角无缝聚焦到该特定 Summary 的内部时间段内
+        const timeStart = new Date(summary.time_start).getTime();
+        const timeEnd = new Date(summary.time_end).getTime();
+        
+        console.log('[enterDetailMode] Narrowing timeline range to:', 
+          new Date(timeStart).toLocaleDateString(), '-', new Date(timeEnd).toLocaleDateString()
+        );
+        
+        document.getElementById('time-min-label').textContent = new Date(timeStart).toLocaleDateString();
+        document.getElementById('time-max-label').textContent = new Date(timeEnd).toLocaleDateString();
+        
+        const slider = document.getElementById('slider-timeline');
+        slider.min = timeStart;
+        slider.max = timeEnd;
+        slider.value = timeEnd;
+        currentFilterTime = timeEnd;
+        document.getElementById('val-time-display').textContent = new Date(timeEnd).toLocaleDateString();
+        
+        // 2. 渲染微观图形
+        renderDetailGraph();
+        
+        // 3. 在右侧 Inspector 展示 Summary 概览及内部时序故事链
+        showInspector({ data: summary });
+        
+      } catch (err) {
+        console.error('[enterDetailMode] Error entering detail mode:', err);
+        document.getElementById('list-meta').textContent = '加载原子图失败';
+      }
+    };
+    
+    // 退出微观原子图模式，返回全局视角
+    window.exitDetailMode = () => {
+      console.log('[exitDetailMode] Returning to macro global level');
+      
+      currentGraphLevel = 'global';
+      currentSummaryId = null;
+      currentSummaryData = null;
+      detailNodes = [];
+      detailEdges = [];
+      
+      const btnBack = document.getElementById('btn-back-to-global');
+      const btnReset = document.getElementById('btn-reset-view');
+      if (btnBack) btnBack.style.display = 'none';
+      if (btnReset) btnReset.style.display = 'inline-block';
+      
+      // 重新载入全局图谱
+      loadGlobalGraph();
+    };
+    
+    // 核心微观原子图绘制
+    window.renderDetailGraph = () => {
+      graph.clear();
+      
+      if (detailNodes.length === 0) {
+        document.getElementById('list-meta').textContent = '暂无原子数据';
+        updateDetailNodeList([]);
+        return;
+      }
+      
+      const summary = currentSummaryData;
+      const tMin = new Date(summary.time_start).getTime();
+      const tMax = new Date(summary.time_end).getTime();
+      const tRange = tMax - tMin || 1;
+      
+      // 1. 添加原子节点，并应用高美学排版坐标
+      detailNodes.forEach((node, i) => {
+        const isTimeHidden = currentFilterTime && (new Date(node.event_time).getTime() > currentFilterTime);
+        
+        // 计算排版坐标
+        let finalX = 0;
+        let finalY = 0;
+        
+        if (currentViewMode === 'topology') {
+          // 平面拓扑排版：时间戳作为横轴线性映射，从左到右流淌，纵轴做 5 行错开
+          const tNode = new Date(node.event_time).getTime();
+          const ratio = (tNode - tMin) / tRange; // 0 到 1 之间
+          
+          finalX = (ratio - 0.5) * 500; // 横向分布于 -250 到 250 之间
+          finalY = ((i % 5) - 2) * 55;   // 纵向分布，彻底解决节点重合问题
+          
+        } else {
+          // 地缘沙盘模式：围绕地缘中心做极坐标多圈发散
+          const geoKey = getGeoKey(node.title, node.description);
+          const geo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+          const geoXY = { x: geo.lng * 3.5, y: -geo.lat * 4.5 };
+          
+          const angle = (i / detailNodes.length) * Math.PI * 2;
+          const radius = 10 + (i % 3) * 6; // 扩散半径
+          
+          finalX = geoXY.x + Math.cos(angle) * radius;
+          finalY = geoXY.y + Math.sin(angle) * radius;
+        }
+        
+        // 添加到 graphOLOGY
+        graph.addNode(String(node.id), {
+          label: node.title ? (node.title.substring(0, 15) + (node.title.length > 15 ? '...' : '')) : `Event ${node.id}`,
+          x: finalX,
+          y: finalY,
+          size: 6,
+          color: '#00d4ff', // 现代 neon cyan 赛博蓝
+          nodeType: 'atomic',
+          hidden: isTimeHidden,
+          data: node
+        });
+      });
+      
+      // 2. 添加原子关系连线
+      detailEdges.forEach(edge => {
+        const sourceStr = String(edge.source);
+        const targetStr = String(edge.target);
+        
+        if (graph.hasNode(sourceStr) && graph.hasNode(targetStr)) {
+          // 安全防崩机制：若已存在该两个原子节点之间的连边（无论正向反向），则不再重复添加
+          if (graph.hasEdge(sourceStr, targetStr) || graph.hasEdge(targetStr, sourceStr)) {
+            console.log(`[renderDetailGraph] Skipping duplicate or reverse duplicate edge between ${sourceStr} and ${targetStr}`);
+            return;
+          }
+          
+          const isTemp = edge.type === 'temporal';
+          let edgeLabel = edge.description ? edge.description.substring(0, 10) : '';
+          
+          if (isTemp) {
+            edgeLabel = '时序推演';
+          }
+          
+          graph.addEdge(sourceStr, targetStr, {
+            size: isTemp ? 1.5 : Math.max(Math.min(Math.log(edge.weight + 1) * 1.5, 5), 1.5),
+            color: isTemp ? 'rgba(165, 94, 234, 0.35)' : 'rgba(0, 212, 255, 0.3)', // 时序紫与物理蓝
+            label: edgeLabel,
+            edgeType: edge.type, 
+            hidden: false,
+            weight: edge.weight
+          });
+        }
+      });
+      
+      const visibleCount = detailNodes.filter(n => {
+        const isTimeHidden = new Date(n.event_time).getTime() > currentFilterTime;
+        return !isTimeHidden;
+      }).length;
+      
+      document.getElementById('list-meta').textContent = `展示 ${visibleCount}/${detailNodes.length} 原子节点`;
+      
+      // 3. 渲染左侧原子事件列表
+      updateDetailNodeList(detailNodes);
+      
+      // 4. 重绘 Canvas 世界地图（若在 geo 模式）
+      drawCyberWorldMap();
+      
+      // 5. 排版自适应就绪与镜头聚焦
+      setTimeout(() => {
+        if (renderer) {
+          renderer.refresh();
+          fitGraphToView(250);
+        }
+      }, 100);
+      
+      // 6. 动态调整透明度
+      updateNodesAndEdgesOpacity();
+    };
+    
+    // 更新左侧原子列表展示
+    function updateDetailNodeList(nodes) {
+      const list = document.getElementById('node-list');
+      document.getElementById('list-title').textContent = `原子事件 (${nodes.length})`;
+      
+      const visibleNodes = nodes.filter(n => {
+        if (!graph.hasNode(String(n.id))) return false;
+        return !graph.getNodeAttribute(String(n.id), 'hidden');
+      });
+      
+      document.getElementById('list-meta').textContent = `激活展示: ${visibleNodes.length} / ${nodes.length}`;
+      
+      if (visibleNodes.length === 0) {
+        list.innerHTML = '<div class="empty-note">此时间段内无活跃原子事件</div>';
+        return;
+      }
+      
+      list.innerHTML = visibleNodes.map(n => {
+        const geoKey = getGeoKey(n.title, n.description);
+        const geo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+        return `
+          <div class="stack-item" onclick="focusNode('${n.id}')" style="border-left: 3px solid #00d4ff">
+            <div class="item-title" style="font-weight:600;">${n.title}</div>
+            <div class="chip-row">
+              <span class="chip info" style="font-size:0.65rem">可信: ${(n.confidence * 100).toFixed(0)}%</span>
+              <span class="chip" style="font-size:0.65rem; background:rgba(255,255,255,0.04)">⏱️ ${new Date(n.event_time).toLocaleDateString()}</span>
+              <span class="chip warn" style="font-size:0.65rem; background:rgba(0, 212, 255, 0.05)">📍 ${geo.name}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // 右侧展示原子事件提取卡片详情
+    window.showAtomicInspector = (data) => {
+      const body = document.getElementById('inspector-body');
+      console.log('[showAtomicInspector] Displaying details for atomic event:', data.id, 'Title:', data.title);
+      
+      const geoKey = getGeoKey(data.title, data.description);
+      const geoInfo = GEO_COORDS[geoKey] || GEO_COORDS['GL'];
+      
+      body.innerHTML = `
+        <div class="lineage-card" style="margin-bottom:1rem">
+          <div class="eyebrow" style="color: var(--neon-cyan)">原子事实节点 (L1 Proto Event)</div>
+          <h4 style="color:#fff; font-size:1.05rem; margin:0.4rem 0;">${data.title}</h4>
+          <p style="color:#a5b5c9; font-size:0.85rem; line-height:1.5;">${data.description || '无详细描述'}</p>
+          <div class="chip-row" style="margin-top:0.6rem">
+            <span class="chip info" style="font-size:0.7rem">提取可信度: ${(data.confidence * 100).toFixed(0)}%</span>
+            <span class="chip warn" style="font-size:0.7rem">📍 ${geoInfo.name}</span>
+          </div>
+          <div style="margin-top:0.8rem">
+            <small style="color:#576b85; font-size:0.7rem">事件发生时间: ${new Date(data.event_time).toLocaleDateString()} ${new Date(data.event_time).toLocaleTimeString()}</small>
+          </div>
+        </div>
+        
+        <div class="lineage-card" style="margin-bottom:1.5rem">
+          <div class="eyebrow" style="color: var(--neon-green)">📰 关联情报新闻源 (Evidence)</div>
+          <div style="margin-top:0.6rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:0.8rem; border-radius:6px;">
+            <div style="color:#fff; font-weight:600; font-size:0.85rem; line-height:1.4; margin-bottom:0.4rem;">
+              ${data.news_title || '无关联新闻标题'}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.6rem;">
+              <span style="font-size:0.7rem; color:#8c9cb3;">来源: ${data.news_source || '未知源'}</span>
+              <a href="/proto-events.html" class="play-btn" style="text-decoration:none; padding:2px 8px; font-size:0.65rem;">进入解析台 🔍</a>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
     document.addEventListener('DOMContentLoaded', initGraph);
   </script>
 </body>

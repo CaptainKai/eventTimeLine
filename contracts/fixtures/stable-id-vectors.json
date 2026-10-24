@@ -1,0 +1,14 @@
+[
+  {
+    "name": "normalized-url-news",
+    "kind": "news",
+    "input": { "source": "RSS", "source_url": "https://Example.com/a?b=2&a=1#x" },
+    "expected": "c2eb6e9816ff8492dbe8821def10f18f6575e3765447fa1d1e9f6a9454b3611e"
+  },
+  {
+    "name": "canonical-proto-payload",
+    "kind": "proto",
+    "input": { "news_id": "n1", "parser_version": "p1", "event_index": 0, "payload": { "actor": "A", "action": "meet" } },
+    "expected": "d8fae431ebc3ccaa2c519a5227e6f6e4d84b51a0cb102e178e14472459cc5cfb"
+  }
+]

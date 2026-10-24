@@ -55,6 +55,12 @@ describe('API Client', () => {
       assert.strictEqual(typeof client.getTimeline, 'function');
       assert.strictEqual(typeof client.getEntities, 'function');
       assert.strictEqual(typeof client.searchEntities, 'function');
+      assert.strictEqual(typeof client.searchSemanticNews, 'function');
+      assert.strictEqual(typeof client.getTopicTrends, 'function');
+      assert.strictEqual(typeof client.getQueryLineage, 'function');
+      assert.strictEqual(typeof client.getQueryGraph, 'function');
+      assert.strictEqual(typeof client.getAgentTools, 'function');
+      assert.strictEqual(typeof client.executeAgentTool, 'function');
     });
   });
 
@@ -63,7 +69,7 @@ describe('API Client', () => {
       // 测试访问不存在的端点
       await assert.rejects(
         client.get('/nonexistent-endpoint'),
-        (err) => err instanceof Error && err.message.includes('Not Found')
+        (err) => err instanceof Error && err.status === 404 && err.code === 'Not Found'
       );
     });
   });

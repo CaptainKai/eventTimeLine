@@ -206,7 +206,10 @@ npm run rebuild-atomic-graph -- --resume-after-phase1 --reset-failed-jobs --drai
 | `npm start` | 启动 API、Dashboard 和后台 worker |
 | `npm run dev` | 带 trace warnings 启动服务 |
 | `npm run sweep` | 执行一次数据源抓取/聚合 |
-| `npm test` | 运行测试 |
+| `npm test` / `npm.cmd test` | 运行稳定单元测试与数据源测试；Windows PowerShell 推荐 `npm.cmd test` |
+| `npm run test:unit` | 只运行 `test/unit/*.test.mjs` |
+| `npm run test:sources` | 只运行 `test/sources/*.test.mjs` |
+| `npm run test:integration` | 运行集成测试；需要本地数据库/外部依赖就绪 |
 | `npm run migrate` | 执行基础迁移脚本 |
 | `npm run migrate-atomic-graph` | 创建原子关系图基础表 |
 | `npm run migrate-atomic-summary-queue` | 创建 summary job 队列字段和表 |
@@ -335,10 +338,13 @@ eventTimeLine/
 ## 测试
 
 ```bash
-npm test
-node test/unit/relationship-summary-manager.test.mjs
-node test/unit/batch-event-clusterer.test.mjs
+npm.cmd test
+npm run test:unit
+npm run test:sources
+npm run test:integration
 ```
+
+默认测试脚本使用 `node --test --experimental-test-isolation=none`，避免当前 Windows/Node 22 环境下 test runner 子进程隔离偶发 `spawn EPERM`，同时不再默认包含旧的 root 诊断脚本和数据库集成脚本。
 
 ## 技术栈
 

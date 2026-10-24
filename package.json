@@ -5,8 +5,16 @@
   "scripts": {
     "start": "node server.mjs",
     "dev": "node --trace-warnings server.mjs",
+    "dev:stack": "node scripts/dev-stack.mjs",
+    "stack:stop": "node scripts/dev-stack.mjs --stop",
+    "check:start": "node --check server.mjs",
     "sweep": "node apis/orchestrator.mjs",
-    "test": "node --test \"test/**/*.test.mjs\"",
+    "test": "node --test --experimental-test-isolation=none \"test/unit/*.test.mjs\" \"test/sources/*.test.mjs\"",
+    "test:unit": "node --test --experimental-test-isolation=none \"test/unit/*.test.mjs\"",
+    "test:sources": "node --test --experimental-test-isolation=none \"test/sources/*.test.mjs\"",
+    "test:integration": "node --test --experimental-test-isolation=none \"test/integration/*.test.mjs\"",
+    "test:data-foundation": "node --test --experimental-test-isolation=none test/unit/stable-identifiers.test.mjs test/unit/contract-validator.test.mjs test/unit/processing-context.test.mjs",
+    "test:python": "python -m unittest discover -s test/python -p \"test_*.py\"",
     "migrate": "node scripts/migrate.mjs",
     "migrate-canonical-id": "node scripts/migrate-add-canonical-id.mjs",
     "migrate-atomic-graph": "node scripts/run-sql.mjs sql/020_atomic_relationship_graph.sql",
@@ -19,18 +27,29 @@
     "migrate-atomic-summary-queue": "node scripts/run-sql.mjs sql/021_atomic_summary_queue_refactor.sql",
     "backfill-atomic-unassigned": "node scripts/backfill-unassigned-atomic-graph.mjs",
     "migrate-atomic-summary-merge": "node scripts/run-sql.mjs sql/022_atomic_summary_merge.sql",
-    "migrate-atomic-batch-assignment": "node scripts/run-sql.mjs sql/023_atomic_batch_assignment_queue.sql"
+    "migrate-atomic-batch-assignment": "node scripts/run-sql.mjs sql/023_atomic_batch_assignment_queue.sql",
+    "migrate-data-foundation": "node scripts/run-sql.mjs sql/024_data_platform_foundation.sql",
+    "migrate-event-outbox": "node scripts/run-sql.mjs sql/025_event_bus_outbox.sql",
+    "migrate-realtime-serving": "node scripts/run-sql.mjs sql/026_realtime_serving_agent.sql",
+    "migrate-authority-audit": "node scripts/run-sql.mjs sql/027_authority_switch_audit.sql",
+    "outbox:publisher": "node services/outbox-publisher/main.mjs",
+    "parser:worker": "node services/parser-worker/main.mjs",
+    "parser:result-ingestor": "node services/parser-result-ingestor/main.mjs",
+    "embeddings:backfill": "node scripts/backfill-embeddings.mjs",
+    "benchmark:warehouse": "node scripts/benchmark-data-warehouse.mjs",
+    "backfill:news-stable-ids": "node scripts/backfill-news-stable-ids.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
+    "kafkajs": "^2.2.4",
     "pg": "^8.11.0"
   },
   "optionalDependencies": {
-    "puppeteer": "^21.0.0",
-    "cheerio": "^1.0.0",
     "@elastic/elasticsearch": "^8.12.0",
     "@xenova/transformers": "^2.17.0",
-    "onnxruntime-web": "^1.17.0"
+    "cheerio": "^1.0.0",
+    "onnxruntime-web": "^1.17.0",
+    "puppeteer": "^21.0.0"
   },
   "engines": {
     "node": ">=22"

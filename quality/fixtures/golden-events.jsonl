@@ -1,0 +1,4 @@
+{"id":"g1","news":{"title":"Country A imposed sanctions on Company B","content":"Country A imposed sanctions on Company B on Monday."},"expected":{"events":[{"actor":"Country A","action":"impose sanctions","object":"Company B","time":"Monday"}]}}
+{"id":"g2","news":{"title":"Central bank cuts rates","content":"The central bank cut its benchmark rate by 25 basis points."},"expected":{"events":[{"actor":"Central bank","action":"cut rates","object":"benchmark rate","value":"25 basis points"}]}}
+{"id":"g3","news":{"title":"双方举行会谈","content":"甲国与乙国代表周五在首都举行会谈。"},"expected":{"events":[{"actor":"甲国","action":"举行会谈","object":"乙国","time":"周五","location":"首都"}]}}
+

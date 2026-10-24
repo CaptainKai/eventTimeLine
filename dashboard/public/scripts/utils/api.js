@@ -13,18 +13,23 @@ class ApiClient {
    */
   async request(url, options = {}) {
     const fullUrl = url.startsWith('http') ? url : `${this.baseUrl}${url}`;
+    const { timeout: requestedTimeout, signal: externalSignal, ...fetchOptions } = options;
 
     const config = {
-      method: options.method || 'GET',
+      ...fetchOptions,
+      method: fetchOptions.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...(fetchOptions.headers || {}),
       },
-      ...options,
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const timeout = requestedTimeout ?? this.timeout;
+    const abortFromExternal = () => controller.abort(externalSignal.reason);
+    if (externalSignal?.aborted) abortFromExternal();
+    else externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
+    const timeoutId = setTimeout(() => controller.abort('timeout'), timeout);
 
     try {
       const response = await fetch(fullUrl, {
@@ -35,7 +40,14 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let details = null;
+        try { details = await response.json(); } catch { details = null; }
+        const error = new Error(details?.message || `HTTP ${response.status}: ${response.statusText}`);
+        error.name = 'ApiError';
+        error.status = response.status;
+        error.code = details?.error || 'HTTP_ERROR';
+        error.details = details;
+        throw error;
       }
 
       const contentType = response.headers.get('content-type');
@@ -48,11 +60,16 @@ class ApiClient {
       clearTimeout(timeoutId);
 
       if (error.name === 'AbortError') {
-        throw new Error('Request timeout');
+        const abortedError = new Error(externalSignal?.aborted ? 'Request cancelled' : 'Request timeout');
+        abortedError.name = externalSignal?.aborted ? 'RequestCancelledError' : 'RequestTimeoutError';
+        abortedError.code = externalSignal?.aborted ? 'REQUEST_CANCELLED' : 'REQUEST_TIMEOUT';
+        throw abortedError;
       }
 
       console.error('[API] Request error:', error);
       throw error;
+    } finally {
+      externalSignal?.removeEventListener('abort', abortFromExternal);
     }
   }
 
@@ -78,6 +95,14 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  async getWithOptions(url, params = {}, options = {}) {
+    const queryString = Object.keys(params)
+      .filter(key => params[key] != null && params[key] !== '')
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .join('&');
+    return this.request(queryString ? `${url}?${queryString}` : url, { ...options, method: 'GET' });
   }
 
   /**
@@ -438,6 +463,36 @@ class ApiClient {
    */
   async getNewsLineage(id) {
     return this.get(`/intelligence/news/${id}/lineage`);
+  }
+
+  async searchSemanticNews(params = {}, options = {}) {
+    return this.getWithOptions('/query/news', params, options);
+  }
+
+  async getTopicTrends(limit = 20, options = {}) {
+    return this.getWithOptions('/query/topics', { limit }, options);
+  }
+
+  async getQueryLineage(newsId, options = {}) {
+    return this.getWithOptions(`/query/news/${encodeURIComponent(newsId)}/lineage`, {}, options);
+  }
+
+  async getQueryGraph(summaryId, options = {}) {
+    return this.getWithOptions(`/query/graph/${encodeURIComponent(summaryId)}`, {}, options);
+  }
+
+  async getAgentTools(options = {}) {
+    return this.getWithOptions('/agent/tools', {}, options);
+  }
+
+  async executeAgentTool(name, args = {}, options = {}) {
+    return this.request(`/agent/tools/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+      headers: options.requestId ? { 'x-request-id': options.requestId } : undefined,
+      signal: options.signal,
+      timeout: options.timeout,
+    });
   }
 
   /**

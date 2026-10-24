@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://event-timeline.local/contracts/news-raw.schema.json",
+  "type": "object",
+  "required": ["schema_version", "event_id", "event_time", "ingested_at", "pipeline_run_id", "source", "source_url", "title"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "event_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "ingested_at": { "type": "string", "format": "date-time" },
+    "pipeline_run_id": { "type": "string", "minLength": 8 },
+    "source": { "type": "string", "minLength": 1 },
+    "source_url": { "type": "string", "minLength": 1 },
+    "source_event_id": { "type": ["string", "null"] },
+    "title": { "type": "string", "minLength": 1 },
+    "content": { "type": ["string", "null"] },
+    "lang": { "type": "string", "minLength": 2 },
+    "raw_payload": { "type": ["object", "null"] },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

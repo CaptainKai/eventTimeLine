@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-10-23T11:41:02.138Z",
+  "iterations": 9,
+  "counts": {
+    "news": 28376,
+    "proto_events": 50263,
+    "summaries": 973,
+    "relationships": 625560
+  },
+  "raw_aggregation": {
+    "p50_ms": 752.0592999999999,
+    "p95_ms": 800.5484999999999,
+    "average_ms": 746.6259
+  },
+  "dws_preaggregated": {
+    "p50_ms": 1.3887999999997191,
+    "p95_ms": 2.116700000000492,
+    "average_ms": 1.4750222222222267
+  },
+  "query_speedup": 541.5173531107085,
+  "latency_reduction": 0.9981533371105181,
+  "result_consistency": {
+    "compared": 50,
+    "matched": 50,
+    "match_ratio": 1
+  },
+  "news_quality": {
+    "total": 28376,
+    "stable_id_coverage": 1,
+    "version_coverage": 1
+  }
+}
